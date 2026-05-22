@@ -142,7 +142,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Bump formula
-        uses: mislav/bump-homebrew-formula-action@v3
+        uses: mislav/bump-homebrew-formula-action@v4
         with:
           formula-name: janus
           formula-path: Formula/janus.rb

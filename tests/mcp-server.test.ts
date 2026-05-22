@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { JanusConfig } from "../src/config/types.ts";
 import { handleRequest, TOOLS, type ServerContext } from "../src/mcp/server.ts";
+import pkg from "../package.json" with { type: "json" };
 
 let tmpRoot: string;
 let ctx: ServerContext;
@@ -51,9 +52,12 @@ describe("MCP server protocol", () => {
     const resp = await handleRequest({ jsonrpc: "2.0", id: 1, method: "initialize" }, ctx);
     expect(resp).not.toBeNull();
     expect(resp!.result).toBeDefined();
-    const r = resp!.result as { protocolVersion: string; serverInfo: { name: string } };
+    const r = resp!.result as { protocolVersion: string; serverInfo: { name: string; version: string } };
     expect(r.protocolVersion).toBe("2024-11-05");
     expect(r.serverInfo.name).toBe("janus");
+    // Version must track package.json so `janus mcp` reports the real release,
+    // not a hardcoded literal that drifts across bumps.
+    expect(r.serverInfo.version).toBe(pkg.version);
   });
 
   test("notifications/initialized → no response", async () => {

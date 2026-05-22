@@ -29,12 +29,13 @@ import { join } from "node:path";
 import { loadConfig } from "../config/loader.ts";
 import type { JanusConfig, ProjectConfig } from "../config/types.ts";
 import { SearchIndex, type DocKind } from "../core/search-index.ts";
+import pkg from "../../package.json" with { type: "json" };
 
 // ─── Protocol types ──────────────────────────────────────────────────────
 
 const PROTOCOL_VERSION = "2024-11-05";
 const SERVER_NAME = "janus";
-const SERVER_VERSION = "0.2.0";
+const SERVER_VERSION = pkg.version;
 
 interface JsonRpcRequest {
   jsonrpc: "2.0";

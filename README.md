@@ -57,7 +57,7 @@ Every night, Janus walks each of your tracked projects and writes:
 - **Daily cross-project rollup** — synthesizes today's pulses into one note you read in 60 seconds.
 - **Weekly arcs, monthly digests, quarterly retros, yearly retrospectives** — each tier compounds the one below into a narrative the next reader (human or agent) can pick up cold.
 - **Per-project spine** — a continuous Wikipedia-style note that explains the project from scratch in 600 words. Updated, not regenerated.
-- **Janus Wrapped** — a Spotify-Wrapped-style flagship artifact at year close and on project anniversaries. GitHub Wrapped clones show stats; Janus Wrapped writes the actual paragraph of what your year was about — per-project plus a global yearly, a maker personality archetype derived from behavior, top tracks, biggest decision. Markdown, HTML, and PNG export.
+- **Janus Wrapped** — a flagship yearly retrospective at year close and on project anniversaries. Stat dashboards show numbers; Janus Wrapped writes the actual paragraph of what your year was about — per-project plus a global yearly, a maker personality archetype derived from behavior, top tracks, biggest decision. Markdown, HTML, and PNG export.
 
 > [See a synthetic Wrapped sample →](docs/examples/wrapped-2026-sample.md) (three fake projects, no real user data)
 

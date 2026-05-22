@@ -16,7 +16,7 @@ import type { JanusConfig } from "../../config/types.ts";
 import type { LLMRunner } from "../../runners/types.ts";
 import type { WrappedData } from "./types.ts";
 import { loadVoiceSpec } from "../template.ts";
-import wrappedYearlyTemplate from "../../prompts/wrapped-yearly.v2.md" with { type: "text" };
+import wrappedYearlyTemplate from "../../prompts/wrapped-yearly.v3.md" with { type: "text" };
 import wrappedProjectTemplate from "../../prompts/wrapped-project.v2.md" with { type: "text" };
 
 const eta = new Eta({ autoEscape: false, rmWhitespace: false });

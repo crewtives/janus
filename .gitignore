@@ -1,0 +1,38 @@
+node_modules/
+dist/
+out/
+.DS_Store
+*.tsbuildinfo
+# `bun build --compile` leaves these in cwd when the process is interrupted
+.*.bun-build
+
+# Janus runtime state
+.janus/
+.janus.backup-*/
+
+# Pulses generados por Janus en el repo: outputs, no fuente.
+docs/pulse/
+docs/_archive/
+
+# Planning docs that are intentionally private — never include in OSS distribution.
+docs/plans-internal/
+docs/brainstorm-*.json
+
+# Local config (puede contener webhook URL de Discord, paths personales)
+config.local.json
+config.local.*
+*.local.json
+*.local.json.backup-*
+
+# Logs
+logs/
+*.log
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Editor
+.idea/
+.vscode/

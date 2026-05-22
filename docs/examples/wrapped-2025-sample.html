@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1080,initial-scale=1.0">
+  <title>Janus Wrapped 2025</title>
+  <style>* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: radial-gradient(circle at 30% 20%, #1a1f3a 0%, #0a0e1e 100%);
+  min-height: 100vh;
+  padding: 24px;
+  color: #f3f1ec;
+}
+
+.card {
+  width: 1080px;
+  height: 1080px;
+  margin: 0 auto;
+  padding: 80px 72px;
+  background: linear-gradient(145deg, #1c2240 0%, #0f1428 70%);
+  border-radius: 32px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+  position: relative;
+  overflow: hidden;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: -30%;
+  right: -20%;
+  width: 60%;
+  height: 60%;
+  background: radial-gradient(circle, rgba(155, 109, 252, 0.18) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.hero {
+  text-align: left;
+  margin-bottom: 64px;
+}
+
+.brand {
+  font-size: 28px;
+  font-weight: 600;
+  opacity: 0.7;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+.year {
+  font-size: 144px;
+  font-weight: 800;
+  line-height: 1;
+  background: linear-gradient(135deg, #9b6dfc 0%, #fc6dac 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  margin-top: -8px;
+}
+
+.subtitle {
+  font-size: 22px;
+  font-weight: 400;
+  opacity: 0.8;
+  margin-top: 16px;
+  max-width: 700px;
+  line-height: 1.4;
+}
+
+.archetype {
+  background: rgba(155, 109, 252, 0.12);
+  border-left: 4px solid #9b6dfc;
+  padding: 24px 28px;
+  margin: 32px 0;
+  border-radius: 12px;
+}
+
+.archetype .label {
+  font-size: 14px;
+  text-transform: uppercase;
+  opacity: 0.6;
+  letter-spacing: 1.2px;
+  margin-bottom: 8px;
+}
+
+.archetype .value {
+  font-size: 42px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.archetype .explanation {
+  font-size: 18px;
+  opacity: 0.85;
+  line-height: 1.5;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin: 40px 0;
+}
+
+.metric {
+  background: rgba(255, 255, 255, 0.04);
+  padding: 24px 16px;
+  border-radius: 16px;
+  text-align: center;
+}
+
+.metric .num {
+  font-size: 56px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #9b6dfc 0%, #6dfc9b 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.metric .cap {
+  font-size: 14px;
+  opacity: 0.7;
+  margin-top: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.tracks {
+  margin-top: 40px;
+}
+
+.tracks h2,
+.moment h2 {
+  font-size: 24px;
+  margin-bottom: 16px;
+  opacity: 0.9;
+}
+
+.tracks ol {
+  padding-left: 24px;
+}
+
+.tracks li {
+  font-size: 18px;
+  margin: 8px 0;
+  opacity: 0.9;
+}
+
+.tracks li strong {
+  color: #9b6dfc;
+}
+
+.moment {
+  margin-top: 32px;
+  text-align: center;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 16px;
+}
+
+.moment .big {
+  font-size: 32px;
+  font-weight: 600;
+}
+
+.moment .density {
+  font-size: 18px;
+  opacity: 0.7;
+  margin-top: 4px;
+}
+
+footer {
+  position: absolute;
+  bottom: 48px;
+  left: 72px;
+  right: 72px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  opacity: 0.55;
+}
+</style>
+</head>
+<body>
+  <div class="card" data-archetype="the-shipper">
+    <header class="hero">
+      <div class="brand">Janus Wrapped</div>
+      <div class="year">2025</div>
+      <div class="subtitle">Tu año como maker — 3 proyectos vivos en 247 pulses</div>
+    </header>
+
+    <section class="archetype">
+      <div class="label">Tu maker personality</div>
+      <div class="value">The Shipper</div>
+      <div class="explanation">You closed 22 tracks against 7 still open, and your densest week clustered around a launch. Less time was spent revisiting decisions than committing them: 18 canonical ADRs against 41 candidates that stayed unpromoted.</div>
+    </section>
+
+    <section class="metrics">
+      <div class="metric"><div class="num">247</div><div class="cap">Pulses</div></div>
+      <div class="metric"><div class="num">3</div><div class="cap">Proyectos</div></div>
+      <div class="metric"><div class="num">22</div><div class="cap">Tracks cerrados</div></div>
+      <div class="metric"><div class="num">18</div><div class="cap">Decisiones</div></div>
+    </section>
+
+    <section class="tracks">
+      <h2>Top tracks</h2>
+      <ol>
+                <li><strong>kepler-launch-prep</strong> · kepler · 38 menciones</li>
+        <li><strong>helios-billing-rebuild</strong> · helios · 31 menciones</li>
+        <li><strong>atlas-mobile-port</strong> · atlas · 27 menciones</li>
+        <li><strong>kepler-auth-migration</strong> · kepler · 19 menciones</li>
+        <li><strong>helios-vendor-cutover</strong> · helios · 15 menciones</li>
+      </ol>
+    </section>
+
+    <section class="moment">
+      <h2>Semana más densa</h2>
+      <div class="big">2025-09-15 → 2025-09-21</div>
+      <div class="density">47 eventos</div>
+    </section>
+
+    <footer>
+      <div class="caption">Periodo 2025-01-01 — 2025-12-31</div>
+      <div class="gen">Generated by Janus</div>
+    </footer>
+  </div>
+</body>
+</html>

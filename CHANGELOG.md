@@ -4,6 +4,14 @@ All notable changes to Janus are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.2.6] — 2026-05-23
+
+### Fixed
+- **Post-pulse scaffolding now runs from the compiled binary.** The orchestrator used to invoke the four scaffolding scripts (`generate-hubs`, `generate-mocs`, `generate-dashboards`, `fix-pulse-anterior-links`) via `Bun.spawn(["bun", "run", scripts/X.ts])`. That failed two ways from a `bun build --compile` binary running under launchd: `bun` is not on launchd's minimal PATH, and the `.ts` source files do not exist in the binary's filesystem to begin with. Hubs, MOCs, dashboards and the post-pulse `Related` repair therefore never ran from a brew-installed Janus. Refactor: the four scripts now thin-wrap importable modules under `src/core/scaffold/` (`hubs.ts`, `mocs.ts`, `dashboards.ts`, `fix-related.ts`), and the orchestrator calls them in-process. The compiled binary bundles the new modules, the scaffolding actually runs, and the warning `scaffold failed (non-fatal): Executable not found in $PATH: "bun"` is gone.
+
+### Changed
+- The standalone CLI form of each scaffolding script still works (`bun run scripts/generate-hubs.ts`, `bun run scripts/generate-mocs.ts`, etc.) — the scripts now delegate to the new modules but expose the same flags (`--force`, `--dry-run`, `--project`).
+
 ## [0.2.5] — 2026-05-23
 
 ### Fixed

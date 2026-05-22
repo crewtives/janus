@@ -171,33 +171,38 @@ export async function runPulse(opts: RunPulseOptions): Promise<void> {
     // already exist, they are not touched. Without this, the wiki-links each
     // pulse generates (`[[<project>]]`, `[[Decisions MOC]]`, `[[Janus Pulse]]`,
     // etc.) end up broken in the Obsidian graph view. Best-effort, non-fatal.
+    //
+    // Runs in-process so it works from the compiled binary too: there is no
+    // `scripts/` directory in the binary's filesystem, and launchd's minimal
+    // PATH would not find `bun` either.
     try {
-      const scriptDir = join(import.meta.dir, "..", "..", "scripts");
-      for (const script of [
-        "generate-hubs.ts",
-        "generate-mocs.ts",
-        "generate-dashboards.ts",
-        "fix-pulse-anterior-links.ts",
-      ]) {
-        const proc = Bun.spawn(["bun", "run", join(scriptDir, script)], {
-          stdout: "pipe",
-          stderr: "pipe",
-        });
-        const [stdout, stderr] = await Promise.all([
-          new Response(proc.stdout).text(),
-          new Response(proc.stderr).text(),
+      const [{ generateHubs }, { generateMocs }, { generateDashboards }, { fixAllRelated }] =
+        await Promise.all([
+          import("../core/scaffold/hubs.ts"),
+          import("../core/scaffold/mocs.ts"),
+          import("../core/scaffold/dashboards.ts"),
+          import("../core/scaffold/fix-related.ts"),
         ]);
-        await proc.exited;
-        if (proc.exitCode !== 0) {
-          console.warn(`[janus] scaffold ${script} exit=${proc.exitCode}: ${stderr.trim()}`);
-          continue;
-        }
-        const summary = stdout
-          .split("\n")
-          .filter((l) => l.includes("summary:") || l.includes("resumen:") || l.includes("fixed ") || l.includes("would-fix "))
-          .pop();
-        if (summary) console.log(`[janus] ${summary.trim()}`);
-      }
+
+      const hubsSummary = await generateHubs({ config });
+      console.log(
+        `[janus] [hubs] resumen: ${hubsSummary.created} creados, ${hubsSummary.skipped} skipped (de ${hubsSummary.total})`,
+      );
+
+      const mocsSummary = await generateMocs({ config });
+      console.log(
+        `[janus] [mocs] resumen: ${mocsSummary.created} creados, ${mocsSummary.skipped} skipped (de ${mocsSummary.total})`,
+      );
+
+      const dashSummary = await generateDashboards({ config });
+      console.log(
+        `[janus] [dashboards] resumen: ${dashSummary.created} creados, ${dashSummary.skipped} skipped (de ${dashSummary.total})`,
+      );
+
+      const fixSummary = await fixAllRelated({ config, dryRun: false });
+      console.log(
+        `[janus] [fix-prev] fixed ${fixSummary.totalChanged}/${fixSummary.totalScanned} pulses`,
+      );
     } catch (err) {
       console.warn(`[janus] scaffold failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`);
     }

@@ -128,15 +128,9 @@ jobs:
           generate_release_notes: true
 
   # Bump the Homebrew formula in crewtives/homebrew-tap after a release.
-  # ──────────────────────────────────────────────────────────────────────
-  # To activate:
-  #   1. Create the tap repo: gh repo create crewtives/homebrew-tap --public
-  #   2. Copy docs/distribution/homebrew/janus.rb to that repo's Formula/janus.rb
-  #   3. Create a Personal Access Token with `repo` scope on the tap repo, store it
-  #      as the HOMEBREW_TAP_GITHUB_TOKEN secret in this repo.
-  #   4. Remove the `if: false` guard below.
+  # Activated 2026-05-23 (v0.2.4 onward). Requires the HOMEBREW_TAP_GITHUB_TOKEN
+  # secret — a fine-grained PAT with Contents: read/write on crewtives/homebrew-tap.
   homebrew-bump:
-    if: false
     needs: release
     runs-on: ubuntu-latest
     timeout-minutes: 5

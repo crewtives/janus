@@ -4,6 +4,13 @@ All notable changes to Janus are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.2.4] — 2026-05-23
+
+First release with the `homebrew-bump` job in `release.yml` un-guarded. Going forward, every tag push opens a PR against `crewtives/homebrew-tap/Formula/janus.rb` with the new version and SHA256 sums automatically — no more manual tap edits.
+
+### Changed
+- **`.github/workflows/release.yml`** — removed the `if: false` guard on the `homebrew-bump` job. Activation needed the `HOMEBREW_TAP_GITHUB_TOKEN` secret (fine-grained PAT with `Contents: read/write` on the tap repo), which is now configured.
+
 ## [0.2.3] — 2026-05-23
 
 Re-release. No source changes; only the binary distribution layer.

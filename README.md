@@ -318,6 +318,7 @@ Wire it into your `.mcp.json` so other Claude Code sessions can query Janus dire
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — end-to-end diagrams, technical decisions, vault structure.
 - [docs/PRIVACY.md](docs/PRIVACY.md) — what Janus redacts before sending prompts to the LLM, and how to extend or disable it.
 - [docs/mcp.md](docs/mcp.md) — MCP server usage.
+- [ROADMAP.md](ROADMAP.md) — what's coming next.
 - [CHANGELOG.md](CHANGELOG.md) — release history.
 
 ## Phase status

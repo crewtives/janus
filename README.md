@@ -28,14 +28,25 @@ Built by **[Crewtives](https://crewtives.com)** · [Read the notes](https://crew
   <em><code>janus demo</code> materializes a synthetic vault — no Obsidian or Claude Max required.</em>
 </p>
 
-<p align="center">
-  <a href="docs/examples/wrapped-2025-sample.html">
-    <img src="docs/assets/wrapped-hero.png" alt="Janus Wrapped flagship — synthetic 2025 sample" width="420" />
-  </a>
-</p>
+<div align="center">
+  <table>
+    <tr>
+      <td>
+        <a href="docs/examples/wrapped-2026-sample.html">
+          <img src="docs/assets/wrapped-desktop.png" alt="Janus Wrapped — desktop poster (1920×1080)" width="640" />
+        </a>
+      </td>
+      <td>
+        <a href="docs/examples/wrapped-2026-sample.html">
+          <img src="docs/assets/wrapped-mobile.png" alt="Janus Wrapped — mobile portrait reflow" width="160" />
+        </a>
+      </td>
+    </tr>
+  </table>
+</div>
 
 <p align="center">
-  <em>The yearly Wrapped flagship (synthetic data — three fake projects).</em>
+  <em>The yearly Wrapped flagship — same data, two layouts (synthetic, three fake projects).</em>
 </p>
 
 ## What it does
@@ -48,7 +59,7 @@ Every night, Janus walks each of your tracked projects and writes:
 - **Per-project spine** — a continuous Wikipedia-style note that explains the project from scratch in 600 words. Updated, not regenerated.
 - **Janus Wrapped** — a Spotify-Wrapped-style flagship artifact at year close and on project anniversaries. GitHub Wrapped clones show stats; Janus Wrapped writes the actual paragraph of what your year was about — per-project plus a global yearly, a maker personality archetype derived from behavior, top tracks, biggest decision. Markdown, HTML, and PNG export.
 
-> [See a synthetic Wrapped sample →](docs/examples/wrapped-2025-sample.md) (three fake projects, no real user data)
+> [See a synthetic Wrapped sample →](docs/examples/wrapped-2026-sample.md) (three fake projects, no real user data)
 
 The system runs on the **Claude Code CLI** (or Gemini CLI as fallback) via headless invocation, so it uses your Claude Max subscription instead of burning API tokens. It exposes itself as an **MCP server** with 4 tools so other agents can query the synthesized narrative.
 

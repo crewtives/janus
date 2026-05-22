@@ -1,22 +1,22 @@
 ---
 type: wrapped-yearly
-year: 2025
-period_start: 2025-01-01
-period_end: 2025-12-31
+year: 2026
+period_start: 2026-01-01
+period_end: 2026-12-31
 pulses: 247
 projects: 3
 tracks_completed: 22
 decisions: 18
 personality: "The Shipper"
-tags: [wrapped, wrapped/yearly, wrapped/2025]
-aliases: ["Janus Wrapped 2025"]
+tags: [wrapped, wrapped/yearly, wrapped/2026]
+aliases: ["Janus Wrapped 2026"]
 prompt_version: deterministic-fallback
 ---
 
-# Janus Wrapped 2025
+# Janus Wrapped 2026
 
 > [!warning]- Wrapped generated in deterministic mode (LLM unavailable).
-> Re-run `bun janus wrapped --year 2025` once the provider is back online.
+> Re-run `bun janus wrapped --year 2026` once the provider is back online.
 
 ## Your year in numbers
 
@@ -35,9 +35,9 @@ prompt_version: deterministic-fallback
 > You closed 22 tracks against 7 still open, and your densest week clustered around a launch. Less time was spent revisiting decisions than committing them: 18 canonical ADRs against 41 candidates that stayed unpromoted.
 >
 > Evidence:
-> - Kepler launch landed in the densest week of the year (2025-09-15 → 2025-09-21)
-> - Helios billing rebuild closed end of Q4 — second infrastructure debt retired
-> - Atlas mobile port intentionally kept open as exploration, not commitment
+> - Kepler launch landed in the densest week of the year (2026-09-15 → 2026-09-21).
+> - Helios billing rebuild closed end of Q4 — second infrastructure debt retired.
+> - Atlas mobile port intentionally kept open as exploration, not commitment.
 
 ## Top tracks of the year
 
@@ -47,7 +47,7 @@ prompt_version: deterministic-fallback
 4. **kepler-auth-migration** (kepler) — 19 mentions · status: completed
 5. **helios-vendor-cutover** (helios) — 15 mentions · status: completed
 
-## Densest week: 2025-09-15 → 2025-09-21
+## Densest week: 2026-09-15 → 2026-09-21
 
 47 events: 31 pulses + 16 decisions.
 
@@ -59,14 +59,14 @@ prompt_version: deterministic-fallback
 ## Project birthdays
 
 > [!info] Anniversaries this year
-> - helios turned **3 years** old since 2022-04-12
-> - kepler turned **2 years** old since 2023-09-04
+> - helios turned **3 years** old since 2023-04-12
+> - kepler turned **2 years** old since 2024-09-04
 
 ## Themes
 
-- Shipping vs sharpening — the year you finally chose distribution over polish
-- Auth and billing both moved off legacy providers — two infrastructure debts retired
-- Atlas remained an exploration, not a commitment — and that's OK
+- Shipping vs sharpening — the year you finally chose distribution over polish.
+- Auth and billing both moved off legacy providers — two infrastructure debts retired.
+- Atlas remained an exploration, not a commitment — and that is on purpose.
 
 ---
 

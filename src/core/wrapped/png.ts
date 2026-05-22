@@ -19,7 +19,7 @@ import type { JanusConfig } from "../../config/types.ts";
 export interface RenderPngOptions {
   data: WrappedData;
   config: JanusConfig;
-  /** Dimensiones del card. Default 1080x1080 (Instagram-friendly). */
+  /** Canvas dimensions. Default 1920x1080 (matches the design system's fixed canvas). */
   width?: number;
   height?: number;
 }
@@ -41,7 +41,7 @@ export async function renderWrappedPng(opts: RenderPngOptions): Promise<{ path: 
     );
   }
 
-  const width = opts.width ?? 1080;
+  const width = opts.width ?? 1920;
   const height = opts.height ?? 1080;
 
   const browser = await puppeteer.default.launch({
@@ -52,7 +52,7 @@ export async function renderWrappedPng(opts: RenderPngOptions): Promise<{ path: 
     const page = await browser.newPage();
     await page.setViewport({ width, height, deviceScaleFactor: 2 });
     await page.setContent(html, { waitUntil: "networkidle0" });
-    const result = await page.screenshot({ type: "png", clip: { x: 24, y: 24, width: width - 48, height: height - 48 } });
+    const result = await page.screenshot({ type: "png", clip: { x: 0, y: 0, width, height } });
     pngBuffer = Buffer.isBuffer(result) ? result : Buffer.from(result);
   } finally {
     await browser.close();

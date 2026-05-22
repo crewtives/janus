@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1920,initial-scale=1.0">
+  <title>Janus Wrapped 2026</title>
+  <style>@import url("https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&display=swap");
+
+:root {
+  --white: #FFFFFF;
+  --black: #18181B;
+  --red: #F40009;
+  --zinc-600: #52525B;
+  --zinc-500: #71717A;
+  --zinc-400: #A1A1AA;
+  --zinc-300: #D4D4D8;
+  --zinc-200: #E4E4E7;
+  --zinc-100: #F4F4F5;
+  --zinc-50:  #FAFAFA;
+
+  --canvas-w: 1920px;
+  --canvas-h: 1080px;
+  --border: 2px solid var(--black);
+  --hairline: 1px solid var(--zinc-300);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--zinc-100);
+  color: var(--black);
+  font-family: "Inter Tight", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-feature-settings: "ss01", "cv11", "tnum";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+/* Responsive fit. The canvas is a fixed 1920x1080 poster; on smaller
+   viewports we visually scale it to fit while keeping the layout box
+   pixel-exact (so all px sizes, borders and grid math stay precise).
+   The .stage wraps the .canvas; an inline script in the template sets
+   .stage's dimensions and .canvas's transform on load + resize.
+   Puppeteer renders at exactly 1920x1080 → scale stays 1 → no transform. */
+.stage {
+  width: 1920px;
+  height: 1080px;
+  position: relative;
+  overflow: hidden;
+}
+
+.canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--canvas-w);
+  height: var(--canvas-h);
+  background: var(--white);
+  border: var(--border);
+  display: grid;
+  grid-template-rows: 120px 96px 440px 1fr;
+  overflow: hidden;
+  transform-origin: top left;
+}
+
+.canvas > section,
+.canvas > header { border-bottom: var(--border); }
+.canvas > *:last-child { border-bottom: 0; }
+
+.label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--zinc-500);
+  white-space: nowrap;
+}
+
+.label-red {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--red);
+  white-space: nowrap;
+}
+
+.accent { color: var(--red); }
+.muted { color: var(--zinc-400); }
+
+/* ── Header tier ────────────────────────────────────────────── */
+.tier-header {
+  display: grid;
+  grid-template-columns: 480px 1fr 1fr;
+}
+
+.tier-header > div {
+  padding: 22px 36px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.tier-header > div:not(:last-child) { border-right: var(--border); }
+
+.meta-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--zinc-500);
+}
+
+.meta-title {
+  font-size: 38px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.025em;
+  color: var(--black);
+}
+
+.meta-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--zinc-500);
+}
+
+.meta-confidence-track {
+  flex: 1;
+  height: 4px;
+  background: var(--zinc-200);
+  position: relative;
+}
+
+.meta-confidence-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--black);
+}
+
+.thesis-statement {
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+  color: var(--black);
+}
+
+.thesis-sub {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--zinc-500);
+  letter-spacing: 0.04em;
+}
+
+/* ── Hero KPI strip ─────────────────────────────────────────── */
+.tier-hero {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+}
+
+.hero-cell {
+  padding: 16px 22px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 0;
+  position: relative;
+}
+
+.hero-cell:not(:last-child) { border-right: var(--hairline); }
+
+.hero-num {
+  font-size: 36px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--black);
+  font-variant-numeric: tabular-nums;
+}
+
+.hero-num.muted-num { color: var(--zinc-400); }
+
+.hero-num-sub {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--zinc-500);
+  letter-spacing: 0;
+  margin-left: 4px;
+}
+
+.hero-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--zinc-500);
+}
+
+/* ── Core strategy tier ─────────────────────────────────────── */
+.tier-core {
+  display: grid;
+  grid-template-columns: 480px 1fr;
+  min-height: 0;
+}
+
+.core-left {
+  border-right: var(--border);
+  display: grid;
+  grid-template-rows: 1fr auto;
+  padding: 28px 36px;
+  min-height: 0;
+}
+
+.ambition .label { margin-bottom: 14px; }
+
+.ambition-text {
+  font-size: 36px;
+  font-weight: 800;
+  line-height: 1.06;
+  letter-spacing: -0.025em;
+  color: var(--black);
+}
+
+.ambition-text .muted { color: var(--zinc-400); font-weight: 700; }
+
+.activity {
+  margin-top: 22px;
+  border-top: var(--hairline);
+  padding-top: 20px;
+}
+
+.activity-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.activity-peak {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--zinc-500);
+}
+
+.activity-chart {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  align-items: end;
+  gap: 6px;
+  height: 88px;
+}
+
+.bar {
+  background: var(--black);
+  width: 100%;
+  min-height: 2px;
+}
+
+.bar.peak { background: var(--red); }
+
+.activity-axis {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.axis-mark {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-align: center;
+  color: var(--zinc-400);
+}
+
+.core-right {
+  display: grid;
+  grid-template-rows: 38px 1fr auto;
+  min-height: 0;
+}
+
+.cards-band {
+  padding: 0 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: var(--hairline);
+}
+
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  min-height: 0;
+}
+
+.card {
+  padding: 28px 32px;
+  border-right: var(--hairline);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  overflow: hidden;
+}
+.card:last-child { border-right: 0; }
+
+.card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.card-name {
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+  color: var(--black);
+  word-break: break-word;
+  min-width: 0;
+}
+
+.status-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--black);
+  padding: 4px 8px;
+  border: 1px solid var(--black);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.status-tag.soft { color: var(--zinc-500); border-color: var(--zinc-300); }
+
+.card-body {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--zinc-500);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.card-body strong {
+  font-weight: 700;
+  color: var(--black);
+}
+
+.card-stats {
+  margin-top: auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  border-top: var(--hairline);
+  padding-top: 14px;
+}
+
+.card-stat-num {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: var(--black);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.card-stat-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--zinc-500);
+  margin-top: 6px;
+}
+
+.toptracks-band {
+  border-top: var(--hairline);
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  align-items: center;
+  padding: 12px 36px;
+  gap: 18px;
+  min-height: 0;
+}
+
+.toptracks-row {
+  display: flex;
+  gap: 8px;
+  overflow: hidden;
+  flex-wrap: nowrap;
+}
+
+.output-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  border: 1px solid var(--zinc-300);
+  padding: 0 12px;
+  gap: 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.output-badge svg {
+  width: 14px;
+  height: 14px;
+  color: var(--zinc-500);
+  flex-shrink: 0;
+}
+
+.output-badge-text {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--black);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.output-badge-meta {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--zinc-400);
+  white-space: nowrap;
+}
+
+/* ── Execution Trinity ──────────────────────────────────────── */
+.tier-trinity {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  min-height: 0;
+}
+
+.trinity-col {
+  border-right: var(--border);
+  padding: 28px 32px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.trinity-col:last-child { border-right: 0; }
+
+.trinity-col > .label,
+.trinity-col > .sub-label { margin-bottom: 14px; }
+.trinity-col > * + .sub-label { margin-top: 18px; }
+
+.sub-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--zinc-500);
+}
+
+/* Moment Mapping cells */
+.moment-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.moment-cell {
+  border: 1px solid var(--zinc-300);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 6px;
+  gap: 8px;
+  text-align: center;
+  min-height: 122px;
+}
+
+.moment-cell.trending { border: 2px solid var(--red); }
+
+.moment-icon { width: 28px; height: 28px; color: var(--black); }
+.moment-cell.trending .moment-icon { color: var(--red); }
+
+.moment-num {
+  font-size: 26px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--black);
+  font-variant-numeric: tabular-nums;
+}
+
+.moment-cell.trending .moment-num { color: var(--red); }
+
+.moment-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--zinc-500);
+}
+
+.moment-sub {
+  font-size: 8px;
+  font-weight: 600;
+  color: var(--zinc-400);
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+/* Signal bars */
+.signal-grid {
+  display: grid;
+  grid-template-rows: repeat(6, auto);
+  row-gap: 6px;
+}
+
+.signal-row {
+  display: grid;
+  grid-template-columns: 78px 1fr 44px;
+  align-items: center;
+  gap: 10px;
+}
+
+.signal-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--zinc-500);
+}
+
+.signal-track {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 2px;
+  height: 10px;
+}
+
+.signal-cell {
+  background: var(--zinc-200);
+}
+
+.signal-cell.on { background: var(--black); }
+
+.signal-value {
+  font-size: 11px;
+  font-weight: 700;
+  text-align: right;
+  color: var(--black);
+  font-variant-numeric: tabular-nums;
+}
+
+.signal-value.dim { color: var(--zinc-400); }
+
+/* Strategic Asset */
+.asset-headline {
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+  color: var(--black);
+}
+
+.asset-body {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--zinc-500);
+  margin-top: 10px;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.asset-body strong { font-weight: 700; color: var(--black); }
+
+.week-box {
+  margin-top: 16px;
+  border: 1px solid var(--zinc-300);
+  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.week-range {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  color: var(--black);
+  font-variant-numeric: tabular-nums;
+}
+
+.week-detail {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--zinc-500);
+  margin-top: 4px;
+}
+
+.week-density {
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  color: var(--red);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.themes-list {
+  margin-top: 16px;
+  display: grid;
+  gap: 6px;
+}
+
+.theme-row {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--zinc-600);
+  line-height: 1.35;
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  align-items: start;
+  gap: 6px;
+}
+
+.theme-marker {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--zinc-400);
+}
+
+/* Achievements grid */
+.ach-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.ach-card {
+  border: 1px solid var(--zinc-300);
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  align-items: center;
+  gap: 10px;
+  min-height: 50px;
+}
+
+.ach-card.locked { opacity: 0.3; }
+.ach-card.featured { border: 2px solid var(--red); }
+
+.ach-icon {
+  width: 22px;
+  height: 22px;
+  color: var(--black);
+}
+
+.ach-card.featured .ach-icon { color: var(--red); }
+
+.ach-name {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--black);
+  line-height: 1;
+}
+
+.ach-meta {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--zinc-500);
+  letter-spacing: 0.04em;
+  margin-top: 3px;
+}
+
+.primary-engine {
+  margin-top: 14px;
+  border-top: var(--hairline);
+  padding-top: 14px;
+}
+
+.engine-name {
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--red);
+  margin-top: 4px;
+}
+
+.engine-evidence {
+  margin-top: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--zinc-500);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.birthdays-row {
+  margin-top: 12px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.birthday-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  border: 1px solid var(--zinc-300);
+  padding: 0 8px;
+  gap: 6px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--black);
+}
+
+.birthday-pill svg {
+  width: 11px;
+  height: 11px;
+  color: var(--zinc-500);
+}
+
+/* ── Mobile / portrait reflow ───────────────────────────────────
+   When the viewport is narrow or in portrait, the 1920×1080 poster
+   reflows to a single-column stack. The JS fit script (in the template)
+   also short-circuits in this mode and clears the transform/stage size.
+   Borders flip from inter-column to inter-row.
+*/
+@media (orientation: portrait), (max-width: 980px) {
+  html, body {
+    overflow: auto;
+  }
+  body {
+    display: block;
+    min-height: 0;
+    background: var(--white);
+  }
+  .stage {
+    width: 100% !important;
+    height: auto !important;
+    position: static;
+    overflow: visible;
+  }
+  .canvas {
+    position: static;
+    width: 100%;
+    height: auto;
+    transform: none !important;
+    border-left: 0;
+    border-right: 0;
+    grid-template-rows: auto auto auto auto;
+    overflow: visible;
+  }
+
+  /* Header — stack 3 cols vertically */
+  .tier-header {
+    grid-template-columns: 1fr;
+  }
+  .tier-header > div {
+    padding: 22px 20px;
+  }
+  .tier-header > div:not(:last-child) {
+    border-right: 0;
+    border-bottom: var(--hairline);
+  }
+  .meta-title { font-size: 30px; }
+  .thesis-statement { font-size: 24px; }
+
+  /* Hero — 2×4 grid (was 1×8) */
+  .tier-hero {
+    grid-template-columns: 1fr 1fr;
+  }
+  .hero-cell {
+    padding: 16px 20px;
+    border-right: 0 !important;
+    border-bottom: var(--hairline);
+    min-height: 84px;
+  }
+  .hero-cell:nth-child(odd) {
+    border-right: var(--hairline) !important;
+  }
+  .hero-cell:nth-last-child(-n+2) {
+    border-bottom: 0;
+  }
+  .hero-num { font-size: 30px; }
+
+  /* Core — stack 4+8 into single column */
+  .tier-core {
+    grid-template-columns: 1fr;
+  }
+  .core-left {
+    padding: 24px 20px;
+    border-right: 0;
+    border-bottom: var(--border);
+  }
+  .ambition-text { font-size: 28px; }
+  .activity-chart { height: 72px; }
+  .core-right {
+    grid-template-rows: auto auto auto;
+  }
+  .cards-band {
+    padding: 14px 20px;
+  }
+  .cards-grid {
+    grid-template-columns: 1fr;
+  }
+  .card {
+    padding: 22px 20px;
+    border-right: 0;
+    border-bottom: var(--hairline);
+  }
+  .card:last-child {
+    border-bottom: 0;
+  }
+  .card-name { font-size: 24px; }
+  .toptracks-band {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 16px 20px;
+  }
+  .toptracks-row {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+
+  /* Trinity — stack 3 cols vertically */
+  .tier-trinity {
+    grid-template-columns: 1fr;
+  }
+  .trinity-col {
+    border-right: 0;
+    border-bottom: var(--hairline);
+    padding: 24px 20px;
+  }
+  .trinity-col:last-child {
+    border-bottom: 0;
+  }
+  .moment-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  .moment-cell { min-height: 104px; }
+  .moment-num { font-size: 28px; }
+
+  /* Signals: full-width but bars get a bit shorter label col */
+  .signal-row {
+    grid-template-columns: 88px 1fr 50px;
+  }
+
+  /* Strategic asset */
+  .asset-headline { font-size: 22px; }
+  .week-range { font-size: 18px; }
+  .week-density { font-size: 30px; }
+
+  /* Achievements stay 2-col, fine on narrow widths */
+  .ach-grid { gap: 6px; }
+  .engine-name { font-size: 32px; }
+}
+
+/* Very narrow phones — collapse hero into 1 column */
+@media (max-width: 420px) {
+  .tier-hero { grid-template-columns: 1fr; }
+  .hero-cell { border-right: 0 !important; }
+  .moment-grid { grid-template-columns: repeat(2, 1fr); }
+  .ach-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+  <div class="stage">
+  <main class="canvas" data-archetype="the-shipper">
+
+    <header class="tier-header">
+      <div class="header-meta">
+        <div>
+          <div class="meta-eyebrow">Janus &nbsp;//&nbsp; Wrapped &nbsp;//&nbsp; 2026</div>
+          <div class="meta-title">MAKER FRAMEWORK</div>
+        </div>
+        <div class="meta-foot">
+          <span>Confidence</span>
+          <div class="meta-confidence-track"><div class="meta-confidence-fill" style="width: 78%"></div></div>
+          <span>78%</span>
+        </div>
+      </div>
+      <div>
+        <div class="label-red">Primary Goal</div>
+        <div class="thesis-statement"><span class="accent">Compound Velocity.</span> Close more than you open.</div>
+        <div class="thesis-sub">Ship Ratio + Decision Density</div>
+      </div>
+      <div>
+        <div class="label-red">Success Lens</div>
+        <div class="thesis-statement">Tracks Closed <span class="accent">&amp; Canonical ADRs</span></div>
+        <div class="thesis-sub">Quantitative + Architectural</div>
+      </div>
+    </header>
+
+    <section class="tier-hero">
+      <div class="hero-cell">
+        <div class="hero-num">247 <span class="hero-num-sub">of 312</span></div>
+        <div class="hero-label">Active Pulses</div>
+      </div>
+      <div class="hero-cell">
+        <div class="hero-num">3 <span class="hero-num-sub">of 5</span></div>
+        <div class="hero-label">Projects Live</div>
+      </div>
+      <div class="hero-cell">
+        <div class="hero-num">22 <span class="hero-num-sub">+7 open</span></div>
+        <div class="hero-label">Tracks Closed</div>
+      </div>
+      <div class="hero-cell">
+        <div class="hero-num">18 <span class="hero-num-sub">+41 cand.</span></div>
+        <div class="hero-label">Canonical ADRs</div>
+      </div>
+      <div class="hero-cell">
+        <div class="hero-num">1,843</div>
+        <div class="hero-label">Commits</div>
+      </div>
+      <div class="hero-cell">
+        <div class="hero-num">287</div>
+        <div class="hero-label">Sessions</div>
+      </div>
+      <div class="hero-cell">
+        <div class="hero-num">413 <span class="hero-num-sub">hrs</span></div>
+        <div class="hero-label">Time at Keys</div>
+      </div>
+      <div class="hero-cell">
+        <div class="hero-num">76%</div>
+        <div class="hero-label">Ship Ratio</div>
+      </div>
+    </section>
+
+    <section class="tier-core">
+      <div class="core-left">
+        <div class="ambition">
+          <div class="label">Overarching Ambition</div>
+          <div class="ambition-text"><span>Decide once. Close the loop.</span> <span class="muted">Don&#39;t revisit decisions that are already made.</span></div>
+        </div>
+        <div class="activity">
+          <div class="activity-header">
+            <div class="label">Activity · Monthly</div>
+            <div class="activity-peak">Peak Sep · 34</div>
+          </div>
+          <div class="activity-chart">
+            <div class="bar" style="height: 56%" title="Jan · 19"></div>
+            <div class="bar" style="height: 71%" title="Feb · 24"></div>
+            <div class="bar" style="height: 79%" title="Mar · 27"></div>
+            <div class="bar" style="height: 62%" title="Apr · 21"></div>
+            <div class="bar" style="height: 53%" title="May · 18"></div>
+            <div class="bar" style="height: 41%" title="Jun · 14"></div>
+            <div class="bar" style="height: 26%" title="Jul · 9"></div>
+            <div class="bar" style="height: 35%" title="Aug · 12"></div>
+            <div class="bar peak" style="height: 100%" title="Sep · 34"></div>
+            <div class="bar" style="height: 82%" title="Oct · 28"></div>
+            <div class="bar" style="height: 74%" title="Nov · 25"></div>
+            <div class="bar" style="height: 47%" title="Dec · 16"></div>
+          </div>
+          <div class="activity-axis">
+            <div class="axis-mark">J</div>
+            <div class="axis-mark">F</div>
+            <div class="axis-mark">M</div>
+            <div class="axis-mark">A</div>
+            <div class="axis-mark">M</div>
+            <div class="axis-mark">J</div>
+            <div class="axis-mark">J</div>
+            <div class="axis-mark">A</div>
+            <div class="axis-mark">S</div>
+            <div class="axis-mark">O</div>
+            <div class="axis-mark">N</div>
+            <div class="axis-mark">D</div>
+          </div>
+        </div>
+      </div>
+      <div class="core-right">
+        <div class="cards-band">
+          <div class="label">Project Portfolio</div>
+          <div class="label">3 of 5 living</div>
+        </div>
+        <div class="cards-grid">
+          <div class="card">
+            <div class="card-head">
+              <div class="card-name">kepler</div>
+              <span class="status-tag ">LEADS</span>
+            </div>
+            <div class="card-body">Leading thread: <strong>kepler-launch-prep</strong> — completed as of 2026-09-19.</div>
+            <div class="card-stats">
+              <div><div class="card-stat-num">57</div><div class="card-stat-label">Mentions</div></div>
+              <div><div class="card-stat-num">2</div><div class="card-stat-label">Tracks</div></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head">
+              <div class="card-name">helios</div>
+              <span class="status-tag soft">FOLLOWS</span>
+            </div>
+            <div class="card-body">Leading thread: <strong>helios-billing-rebuild</strong> — completed as of 2026-12-02.</div>
+            <div class="card-stats">
+              <div><div class="card-stat-num">46</div><div class="card-stat-label">Mentions</div></div>
+              <div><div class="card-stat-num">2</div><div class="card-stat-label">Tracks</div></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head">
+              <div class="card-name">atlas</div>
+              <span class="status-tag soft">PUNCTUATE</span>
+            </div>
+            <div class="card-body">Leading thread: <strong>atlas-mobile-port</strong> — open as of 2026-11-14.</div>
+            <div class="card-stats">
+              <div><div class="card-stat-num">27</div><div class="card-stat-label">Mentions</div></div>
+              <div><div class="card-stat-num">1</div><div class="card-stat-label">Tracks</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="toptracks-band">
+          <div class="label">Top Tracks · Year</div>
+          <div class="toptracks-row">
+            <div class="output-badge">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+              <span class="output-badge-text">kepler-launch-prep</span>
+              <span class="output-badge-meta">38×</span>
+            </div>
+            <div class="output-badge">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+              <span class="output-badge-text">helios-billing-rebuild</span>
+              <span class="output-badge-meta">31×</span>
+            </div>
+            <div class="output-badge">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+              <span class="output-badge-text">atlas-mobile-port</span>
+              <span class="output-badge-meta">27×</span>
+            </div>
+            <div class="output-badge">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+              <span class="output-badge-text">kepler-auth-migration</span>
+              <span class="output-badge-meta">19×</span>
+            </div>
+            <div class="output-badge">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+              <span class="output-badge-text">helios-vendor-cutover</span>
+              <span class="output-badge-meta">15×</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="tier-trinity">
+      <div class="trinity-col">
+        <div class="label">Moment Mapping</div>
+        <div class="moment-grid">
+          <div class="moment-cell">
+            <svg class="moment-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.5.5 0 0 1-.92.04L9.24 10.5a.5.5 0 0 0-.95-.07L5.49 18a2 2 0 0 1-1.93 1.5H2"/></svg>
+            <div class="moment-num">247</div>
+            <div class="moment-label">Pulses</div>
+          </div>
+          <div class="moment-cell">
+            <svg class="moment-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+            <div class="moment-num">22</div>
+            <div class="moment-label">Tracks Closed</div>
+          </div>
+          <div class="moment-cell">
+            <svg class="moment-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M14.5 17H4"/><path d="M14.5 6.5 11 3l-3.5 3.5"/><path d="M11 3v15"/><path d="M20 8v8"/><path d="M16 12h8"/></svg>
+            <div class="moment-num">18</div>
+            <div class="moment-label">ADRs</div>
+          </div>
+          <div class="moment-cell trending">
+            <svg class="moment-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+            <div class="moment-num">47</div>
+            <div class="moment-label">Densest Week</div>
+            <div class="moment-sub">2026-09-15</div>
+          </div>
+        </div>
+
+        <div class="sub-label">Personality Signals</div>
+        <div class="signal-grid">
+          <div class="signal-row"><div class="signal-label">Ship</div><div class="signal-track"><div class="signal-cell on"></div><div class="signal-cell on"></div><div class="signal-cell on"></div><div class="signal-cell on"></div><div class="signal-cell on"></div><div class="signal-cell on"></div><div class="signal-cell on"></div><div class="signal-cell on"></div><div class="signal-cell"></div><div class="signal-cell"></div></div><div class="signal-value ">76%</div></div>
+          <div class="signal-row"><div class="signal-label">Refactor</div><div class="signal-track"><div class="signal-cell on"></div><div class="signal-cell on"></div><div class="signal-cell"></div><div class="signal-cell"></div><div class="signal-cell"></div><div class="signal-cell"></div><div class="signal-cell"></div><div class="signal-cell"></div><div class="signal-cell"></div><div class="signal-cell"></div></div><div class="signal-value ">18%</div></div>
+          <div class="signal-row"><div class="signal-label">Explore</div><div class="signal-track"><div class="signal-cell on"></div><div class="signal-cell on"></div><div class="signal-cell on"></div><div class="signal-cell on"></div><div class="signal-cell on"></div><div class="signal-cell on"></div><div class="signal-cell"></div><div class="signal-cell"></div><div class="signal-cell"></div><div class="signal-cell"></div></div><div class="signal-value ">60%</div></div>
+          <div class="signal-row"><div class="signal-label">Connector</div><div class="signal-track"><div class="signal-cell on"></div><div class="signal-cell on"></div><div class="signal-cell"></div><div class="signal-cell"></div><div class="signal-cell"></div><div class="signal-cell"></div><div class="signal-cell"></div><div class="signal-cell"></div><div class="signal-cell"></div><div class="signal-cell"></div></div><div class="signal-value ">22%</div></div>
+          <div class="signal-row"><div class="signal-label">Session·Len</div><div class="signal-track"><div class="signal-cell on"></div><div class="signal-cell on"></div><div class="signal-cell"></div><div class="signal-cell"></div><div class="signal-cell"></div><div class="signal-cell"></div><div class="signal-cell"></div><div class="signal-cell"></div><div class="signal-cell"></div><div class="signal-cell"></div></div><div class="signal-value ">14m</div></div>
+          <div class="signal-row"><div class="signal-label">Session·#</div><div class="signal-track"><div class="signal-cell on"></div><div class="signal-cell on"></div><div class="signal-cell on"></div><div class="signal-cell on"></div><div class="signal-cell on"></div><div class="signal-cell on"></div><div class="signal-cell on"></div><div class="signal-cell on"></div><div class="signal-cell on"></div><div class="signal-cell on"></div></div><div class="signal-value ">287</div></div>
+        </div>
+      </div>
+
+      <div class="trinity-col">
+        <div class="label">Strategic Asset</div>
+        <div class="asset-headline">The Decision Graph</div>
+        <div class="asset-body"><strong>You closed 22 tracks against 7 still open, and your densest week clustered around a launch.</strong> Less time was spent revisiting decisions than committing them: 18 canonical ADRs against 41 candidates that stayed unpromoted.</div>
+
+        <div class="sub-label">Densest Week</div>
+        <div class="week-box">
+          <div>
+            <div class="week-range">2026-09-15 → 2026-09-21</div>
+            <div class="week-detail">31 pulses · 16 ADR refs</div>
+          </div>
+          <div class="week-density">47</div>
+        </div>
+
+        <div class="sub-label">Themes of the Year</div>
+        <div class="themes-list">
+          <div class="theme-row"><div class="theme-marker">01</div><div>Shipping vs sharpening — the year you finally chose distribution over polish.</div></div>
+          <div class="theme-row"><div class="theme-marker">02</div><div>Auth and billing both moved off legacy providers — two infrastructure debts retired.</div></div>
+          <div class="theme-row"><div class="theme-marker">03</div><div>Atlas remained an exploration, not a commitment — and that is on purpose.</div></div>
+        </div>
+      </div>
+
+      <div class="trinity-col">
+        <div class="label">Achievements Unlocked</div>
+        <div class="ach-grid">
+          <div class="ach-card">
+            <svg class="ach-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+            <div>
+              <div class="ach-name">Centurion</div>
+              <div class="ach-meta">247 active days</div>
+            </div>
+          </div>
+          <div class="ach-card featured">
+            <svg class="ach-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+            <div>
+              <div class="ach-name">Closer</div>
+              <div class="ach-meta">22 closed · 7 open</div>
+            </div>
+          </div>
+          <div class="ach-card">
+            <svg class="ach-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+            <div>
+              <div class="ach-name">Decider</div>
+              <div class="ach-meta">18 canonical ADRs</div>
+            </div>
+          </div>
+          <div class="ach-card">
+            <svg class="ach-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            <div>
+              <div class="ach-name">Hot Week</div>
+              <div class="ach-meta">47 events · 09-15</div>
+            </div>
+          </div>
+          <div class="ach-card">
+            <svg class="ach-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+            <div>
+              <div class="ach-name">Compounder</div>
+              <div class="ach-meta">287 sessions</div>
+            </div>
+          </div>
+          <div class="ach-card">
+            <svg class="ach-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
+            <div>
+              <div class="ach-name">Scout</div>
+              <div class="ach-meta">60% project spread</div>
+            </div>
+          </div>
+        </div>
+        <div class="primary-engine">
+          <div class="sub-label" style="margin: 0;">Primary Engine</div>
+          <div class="engine-name">The Shipper</div>
+          <div class="engine-evidence">Kepler launch landed in the densest week of the year (2026-09-15 → 2026-09-21).</div>
+          <div class="birthdays-row">
+            <div class="birthday-pill">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><rect x="3" y="8" width="18" height="4"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C9 3 12 8 12 8s3-5 4.5-5a2.5 2.5 0 0 1 0 5"/></svg>
+              <span>helios · YR 3</span>
+            </div>
+            <div class="birthday-pill">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><rect x="3" y="8" width="18" height="4"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C9 3 12 8 12 8s3-5 4.5-5a2.5 2.5 0 0 1 0 5"/></svg>
+              <span>kepler · YR 2</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+  </div>
+  <script>
+    (function () {
+      var W = 1920, H = 1080;
+      var stage = document.querySelector('.stage');
+      var canvas = document.querySelector('.canvas');
+      if (!stage || !canvas) return;
+      // Same predicate as the CSS @media block — keep them in sync.
+      var mq = window.matchMedia('(orientation: portrait), (max-width: 980px)');
+      function fit() {
+        if (mq.matches) {
+          // Mobile/portrait reflow: clear inline overrides and let CSS handle it.
+          stage.style.width = '';
+          stage.style.height = '';
+          canvas.style.transform = '';
+          return;
+        }
+        var s = Math.min(window.innerWidth / W, window.innerHeight / H, 1);
+        stage.style.width = (W * s) + 'px';
+        stage.style.height = (H * s) + 'px';
+        canvas.style.transform = 'scale(' + s + ')';
+      }
+      fit();
+      window.addEventListener('resize', fit);
+      if (mq.addEventListener) mq.addEventListener('change', fit);
+      else if (mq.addListener) mq.addListener(fit);
+    })();
+  </script>
+</body>
+</html>

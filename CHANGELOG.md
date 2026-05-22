@@ -4,6 +4,11 @@ All notable changes to Janus are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.2.5] — 2026-05-23
+
+### Fixed
+- **`janus mcp` now reports the real release version** in `serverInfo.version` instead of the hardcoded `0.2.0` literal that had been frozen since the MCP server first shipped in Phase 1D. Discovered while smoke-testing the MCP handshake against v0.2.4. The constant is now wired to `package.json` via the same import-attribute pattern `bin/janus.ts` already uses, and the MCP test suite asserts `serverInfo.version === pkg.version` so a regression makes the build fail.
+
 ## [0.2.4] — 2026-05-23
 
 First release with the `homebrew-bump` job in `release.yml` un-guarded. Going forward, every tag push opens a PR against `crewtives/homebrew-tap/Formula/janus.rb` with the new version and SHA256 sums automatically — no more manual tap edits.

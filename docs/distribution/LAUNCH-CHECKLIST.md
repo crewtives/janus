@@ -47,12 +47,12 @@ The release workflow has the codesign + notarize steps already written, guarded 
 
 The formula template lives at `docs/distribution/homebrew/janus.rb` with bootstrap instructions in `docs/distribution/README.md`.
 
-- [ ] Create the tap repo: `gh repo create crewtives/homebrew-janus --public`
+- [ ] Create the tap repo: `gh repo create crewtives/homebrew-tap --public`
 - [ ] Copy `docs/distribution/homebrew/janus.rb` to `Formula/janus.rb` in the tap repo.
 - [ ] Replace the four `REPLACE_WITH_SHA256_OF_*` placeholders. SHAs live in the `SHA256SUMS` asset of the current Janus release (`gh release download v0.2.0 -p SHA256SUMS`).
 - [ ] Commit + push to the tap repo's `main`.
-- [ ] Test locally: `brew install crewtives/janus/janus && janus --help`
-- [ ] Create a fine-grained PAT with `Contents: read/write` on `crewtives/homebrew-janus`. Save as the `HOMEBREW_TAP_GITHUB_TOKEN` secret in this repo.
+- [ ] Test locally: `brew install crewtives/tap/janus && janus --help`
+- [ ] Create a fine-grained PAT with `Contents: read/write` on `crewtives/homebrew-tap`. Save as the `HOMEBREW_TAP_GITHUB_TOKEN` secret in this repo.
 - [ ] Remove the `if: false` guard on the `homebrew-bump` job in `.github/workflows/release.yml`. From the next tag onward, the tap auto-bumps.
 
 ### Branch protection

@@ -1,10 +1,10 @@
 # Homebrew formula template for Janus.
 #
 # This file is the template that lives at Formula/janus.rb in the
-# crewtives/homebrew-janus tap repo. It does not live in the Janus repo at
+# crewtives/homebrew-tap repo. It does not live in the Janus repo at
 # runtime — Homebrew loads it from the tap when a user runs:
 #
-#   brew install crewtives/janus/janus
+#   brew install crewtives/tap/janus
 #
 # How the file gets updated:
 #   - On every Janus release (tag push), the `homebrew-bump` job in
@@ -13,11 +13,11 @@
 #     the tap repo bumping `version` + `sha256` here.
 #
 # Manual bootstrap steps (one-time, before the auto-bump can work):
-#   1. Create the tap repo:    gh repo create crewtives/homebrew-janus --public
+#   1. Create the tap repo:    gh repo create crewtives/homebrew-tap --public
 #   2. In the tap repo:        mkdir -p Formula && cp <this-file> Formula/janus.rb
 #   3. Edit `version` + `sha256` values below to match the current Janus release.
 #   4. Commit + push to the tap repo's main branch.
-#   5. Verify locally:         brew install crewtives/janus/janus
+#   5. Verify locally:         brew install crewtives/tap/janus
 
 class Janus < Formula
   desc "Personal historian for makers — synthesizes git + Claude Code sessions into Obsidian"

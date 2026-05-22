@@ -127,10 +127,10 @@ jobs:
           fail_on_unmatched_files: true
           generate_release_notes: true
 
-  # Bump the Homebrew formula in crewtives/homebrew-janus after a release.
+  # Bump the Homebrew formula in crewtives/homebrew-tap after a release.
   # ──────────────────────────────────────────────────────────────────────
   # To activate:
-  #   1. Create the tap repo: gh repo create crewtives/homebrew-janus --public
+  #   1. Create the tap repo: gh repo create crewtives/homebrew-tap --public
   #   2. Copy docs/distribution/homebrew/janus.rb to that repo's Formula/janus.rb
   #   3. Create a Personal Access Token with `repo` scope on the tap repo, store it
   #      as the HOMEBREW_TAP_GITHUB_TOKEN secret in this repo.
@@ -146,7 +146,7 @@ jobs:
         with:
           formula-name: janus
           formula-path: Formula/janus.rb
-          homebrew-tap: crewtives/homebrew-janus
+          homebrew-tap: crewtives/homebrew-tap
           tag-name: ${{ github.ref_name }}
           download-url: https://github.com/crewtives/janus/releases/download/${{ github.ref_name }}/janus-macos-arm64
         env:

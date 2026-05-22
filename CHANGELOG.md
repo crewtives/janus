@@ -4,6 +4,13 @@ All notable changes to Janus are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.2.3] — 2026-05-23
+
+Re-release. No source changes; only the binary distribution layer.
+
+### Fixed
+- **Homebrew tap formula now matches the published release.** The `Formula/janus.rb` shipped against v0.2.2 declared SHA256 sums that did not match the four binaries actually published to the GitHub release (the assets were rebuilt after the formula was generated, and the `homebrew-bump` job is still guarded by `if: false` pending the `HOMEBREW_TAP_GITHUB_TOKEN` secret). `brew install crewtives/tap/janus` failed with "Formula reports different checksum". v0.2.3 cuts a fresh set of binaries and updates the tap by hand so the install path works again.
+
 ## [0.2.2] — 2026-05-22
 
 ### Changed

@@ -1,0 +1,61 @@
+name: Feature request
+description: Propose a new command, prompt, runner, MCP tool, or workflow.
+title: "[feat] "
+labels: ["feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For non-trivial changes (new commands, new prompts, new artifact types, schema migrations) please open an issue **before** writing the PR — the maintainer will confirm scope.
+        For typo fixes and obvious bug fixes with a failing test, skip this and just open a PR.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What's the user (or the agent) trying to do that Janus doesn't help with yet?
+      placeholder: |
+        When I run several Wrapped exports back-to-back I lose track of which project finished. There's no progress indicator.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: What would the user-facing surface look like? Command flags, output files, prompt names, etc.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What did you think about before settling on this?
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope this likely touches
+      multiple: true
+      options:
+        - New `bun janus <verb>` command
+        - New prompt version
+        - New LLMRunner adapter
+        - New MCP tool
+        - SQLite schema change
+        - Wrapped output format
+        - Temporal hierarchy (daily/weekly/...)
+        - Init / wizard / scheduler
+        - Docs only
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: non-obvious
+    attributes:
+      label: Does this touch any non-obvious decision?
+      description: |
+        See [docs/HANDOFF.md § Non-obvious decisions](../docs/HANDOFF.md). Examples: per-project queue serialization, FTS5 sanitize, pulse filename separator, prompt embedding via import attributes, deterministic personality fallback.
+        If yes, explain why the change is safe.

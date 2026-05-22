@@ -1,0 +1,153 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS arm64 — native build on Apple Silicon runner.
+          - os: macos-latest
+            asset: janus-macos-arm64
+            target: ""
+          # macOS x86_64 — cross-compiled from the same arm64 runner via
+          # `bun build --target=bun-darwin-x64`. Avoids the deprecated `macos-13`
+          # Intel runner queue. Rosetta 2 ships on macos-latest so the smoke
+          # `--help` check still runs.
+          - os: macos-latest
+            asset: janus-macos-x64
+            target: "--target=bun-darwin-x64"
+          - os: ubuntu-latest
+            asset: janus-linux-x64
+            target: ""
+          - os: ubuntu-24.04-arm
+            asset: janus-linux-arm64
+            target: ""
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bun build bin/janus.ts --compile ${{ matrix.target }} --outfile ${{ matrix.asset }}
+      - run: ./${{ matrix.asset }} --help
+
+      # macOS code-signing + notarization.
+      # ────────────────────────────────────────────────────────────────
+      # To activate, configure these repo secrets:
+      #   APPLE_DEVELOPER_ID_CERT_BASE64 — base64 of your .p12 certificate
+      #   APPLE_DEVELOPER_ID_CERT_PASSWORD — the .p12 export password
+      #   APPLE_KEYCHAIN_PASSWORD — any password used to create a temp keychain
+      #   APPLE_DEVELOPER_ID_APPLICATION — e.g. "Developer ID Application: Foo (TEAM)"
+      #   APPLE_ID — Apple ID used to notarize
+      #   APPLE_TEAM_ID — 10-char Team ID
+      #   APPLE_APP_SPECIFIC_PASSWORD — app-specific password for notarytool
+      # Then remove the `if: false` guard below.
+      - name: Import signing certificate
+        if: false && startsWith(matrix.os, 'macos')
+        env:
+          CERT_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_CERT_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERT_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          echo "$CERT_BASE64" | base64 --decode > /tmp/cert.p12
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security import /tmp/cert.p12 -k build.keychain -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+          rm /tmp/cert.p12
+
+      - name: Codesign binary
+        if: false && startsWith(matrix.os, 'macos')
+        env:
+          DEVELOPER_ID: ${{ secrets.APPLE_DEVELOPER_ID_APPLICATION }}
+        run: |
+          codesign --force --options runtime --timestamp \
+            --sign "$DEVELOPER_ID" ./${{ matrix.asset }}
+          codesign --verify --verbose ./${{ matrix.asset }}
+
+      - name: Notarize binary
+        if: false && startsWith(matrix.os, 'macos')
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          # Standalone binaries can't be stapled, only notarized. The Gatekeeper
+          # check happens online on first launch.
+          ditto -c -k --keepParent ./${{ matrix.asset }} ./${{ matrix.asset }}.zip
+          xcrun notarytool submit ./${{ matrix.asset }}.zip \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --wait
+          rm ./${{ matrix.asset }}.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+          retention-days: 1
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Compute SHA256SUMS
+        run: |
+          cd artifacts
+          ls -la
+          sha256sum janus-* > SHA256SUMS
+          cat SHA256SUMS
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            artifacts/janus-macos-arm64
+            artifacts/janus-macos-x64
+            artifacts/janus-linux-x64
+            artifacts/janus-linux-arm64
+            artifacts/SHA256SUMS
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+
+  # Bump the Homebrew formula in crewtives/homebrew-janus after a release.
+  # ──────────────────────────────────────────────────────────────────────
+  # To activate:
+  #   1. Create the tap repo: gh repo create crewtives/homebrew-janus --public
+  #   2. Copy docs/distribution/homebrew/janus.rb to that repo's Formula/janus.rb
+  #   3. Create a Personal Access Token with `repo` scope on the tap repo, store it
+  #      as the HOMEBREW_TAP_GITHUB_TOKEN secret in this repo.
+  #   4. Remove the `if: false` guard below.
+  homebrew-bump:
+    if: false
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Bump formula
+        uses: mislav/bump-homebrew-formula-action@v3
+        with:
+          formula-name: janus
+          formula-path: Formula/janus.rb
+          homebrew-tap: crewtives/homebrew-janus
+          tag-name: ${{ github.ref_name }}
+          download-url: https://github.com/crewtives/janus/releases/download/${{ github.ref_name }}/janus-macos-arm64
+        env:
+          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}

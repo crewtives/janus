@@ -1,0 +1,53 @@
+name: Publish to npm
+
+# Runs in parallel to release.yml. Fires on the same tag pushes (v*) and
+# publishes the package to npm so users can run `bunx janus` or
+# `npx janus` without going through the binary installer.
+#
+# Activation requirements:
+#   1. Create an npm automation token (https://www.npmjs.com/settings/<you>/tokens).
+#   2. Save it as the NPM_TOKEN secret in this repo's settings.
+#   3. Remove the `if: false` guard below.
+#
+# Note: the package ships TypeScript sources, not compiled JS, on purpose.
+# Janus is a Bun project and the `bin` entry runs through Bun's TS loader.
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  publish:
+    if: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: 'https://registry.npmjs.org'
+
+      - run: bun install --frozen-lockfile
+
+      # Sanity-check that the version in package.json matches the pushed tag.
+      - name: Verify version matches tag
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg_version=$(bun -p "require('./package.json').version")
+          if [ "$tag" != "$pkg_version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $pkg_version"
+            exit 1
+          fi
+
+      # npm publish via npm CLI (Bun publish exists but npm's --provenance is
+      # better-tested and gives signed attestations).
+      - run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

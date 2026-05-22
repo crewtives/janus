@@ -1,0 +1,41 @@
+{
+  "obsidianVault": "~/Obsidian",
+  "discoverRoots": [
+    "~/projects/myorg/*",
+    "~/work"
+  ],
+  "projects": [
+    {
+      "name": "crewtives-janus",
+      "repoPath": "~/projects/crewtives/janus",
+      "obsidianPath": "~/Obsidian/Projects/crewtives/janus",
+      "status": "active"
+    },
+    {
+      "name": "old-side-project",
+      "repoPath": "~/projects/old",
+      "obsidianPath": "~/Obsidian/Projects/old-side-project",
+      "status": "paused"
+    },
+    {
+      "name": "deprecated-experiment",
+      "repoPath": "~/projects/exp",
+      "obsidianPath": "~/Obsidian/Projects/deprecated-experiment",
+      "status": "archived"
+    }
+  ],
+  "discord": {
+    "webhookUrl": "https://discord.com/api/webhooks/xxx/yyy",
+    "username": "Janus"
+  },
+  "concurrency": 2,
+  "intervalCap": 5,
+  "intervalMs": 60000,
+  "taskTimeoutMs": 1800000,
+  "provider": "claude-code",
+  "fallbackProvider": null,
+  "model": "sonnet",
+  "effort": "xhigh",
+  "fallbackModel": "opus",
+  "language": "en"
+}

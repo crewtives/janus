@@ -8,7 +8,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Bun](https://img.shields.io/badge/Bun-1.3.14-black)](https://bun.sh)
 
-Janus reads your work (git + Claude Code sessions) and writes the continuous narrative of your projects in a temporal hierarchy: daily → weekly → monthly → quarterly → yearly → spine. The narrative is queryable via MCP, so your other agents can ask Janus *"what did we do in X last week?"* and get synthesized context — not raw logs.
+Other tools compile what you know. Janus records what you did.
+
+Janus reads your work (git + Claude Code sessions) and writes the narrative of each project across five tiers — daily → weekly → monthly → quarterly → yearly → spine — straight into your Obsidian vault. The vault becomes both a journal future-you can re-read and an MCP server other agents can query for context — not raw logs.
 
 Built by **[Crewtives](https://crewtives.com)** · [Read the notes](https://crewtives.com/notes/)
 
@@ -44,7 +46,7 @@ Every night, Janus walks each of your tracked projects and writes:
 - **Daily cross-project rollup** — synthesizes today's pulses into one note you read in 60 seconds.
 - **Weekly arcs, monthly digests, quarterly retros, yearly retrospectives** — each tier compounds the one below into a narrative the next reader (human or agent) can pick up cold.
 - **Per-project spine** — a continuous Wikipedia-style note that explains the project from scratch in 600 words. Updated, not regenerated.
-- **Janus Wrapped** — a Spotify-Wrapped-style flagship artifact at year close and on project anniversaries: top tracks, biggest decision, maker personality archetype, themes of the year. Markdown, HTML, and PNG export.
+- **Janus Wrapped** — a Spotify-Wrapped-style flagship artifact at year close and on project anniversaries. GitHub Wrapped clones show stats; Janus Wrapped writes the actual paragraph of what your year was about — per-project plus a global yearly, a maker personality archetype derived from behavior, top tracks, biggest decision. Markdown, HTML, and PNG export.
 
 > [See a synthetic Wrapped sample →](docs/examples/wrapped-2025-sample.md) (three fake projects, no real user data)
 
@@ -60,13 +62,20 @@ The only command that incurs multiple LLM calls in a single run is `wrapped` (on
 
 Builders running several projects in parallel lose the thread by Friday. Git logs say what shipped. Session transcripts say what was tried. The synthesis between the two — the *narrative* of your work — is what you actually need to remember three months later. Janus writes that narrative every night so your future self has it.
 
+Two existing strategies fall short for this:
+
+- **Dashboards and cost trackers** tell you *how much* — sessions, tokens, dollars — but not *what it meant*. You don't re-read a dashboard at 11pm.
+- **Wikis and second brains** compile *what you know* — concepts, decisions, patterns — but group by topic, not by time. The thread of *this week*, *this quarter*, *this year* is lost.
+
+Janus does the third thing. It groups by **night of work**, writes prose (not bullets), and compounds those nights into weeks, months, quarters, years, and a per-project spine. Future-you reads a paragraph; future-agents query an MCP server. Same vault.
+
 The moat is the **quality of synthesis** and the **temporal compaction hierarchy**, not the universality of output. We don't export to Notion or Linear — we own the narrative layer.
 
 ## Who it's for / not for
 
 **For you if** you're running two or more projects in parallel, you already live in Obsidian, you're willing to invest a Claude Max subscription (or a `gemini-cli` setup) in remembering your own work, and you'd rather read a paragraph than a dashboard.
 
-**Not for you if** you work on a team and need shared workspaces (Janus is single-user by design — no seats), you don't use Obsidian (Markdown-everywhere is the sink, dashboards and wikilinks assume it), or you want push-button reports into Notion / Linear / Confluence (export to other systems is explicitly out of scope; Janus owns the narrative layer, not the routing).
+**Not for you if** you work on a team and need shared workspaces (Janus is single-user by design — no seats), you don't use Obsidian (Markdown-everywhere is the sink, dashboards and wikilinks assume it), you want push-button reports into Notion / Linear / Confluence (export to other systems is explicitly out of scope), you want an encyclopedia of *what you've learned* (Janus writes the journal, not the wiki), or you want a dashboard of AI session cost and tokens (Janus writes prose, not metrics).
 
 See [docs/FAQ.md](docs/FAQ.md) for the longer answer to most of the questions this prompts.
 
@@ -281,7 +290,7 @@ Janus generates idempotent artifacts in your Obsidian vault:
 
 ## MCP server
 
-`bun janus mcp` launches a stdio JSON-RPC server exposing 4 tools any agent can call:
+The narrative isn't just for you to read. `bun janus mcp` launches a stdio JSON-RPC server exposing 4 tools any agent can call — so other Claude Code sessions, scripts, or coding agents can query your own history as structured context instead of asking you to re-explain it.
 
 - `janus_ask(query, project?, since?, kind?)` — FTS5 search returning narrative excerpts.
 - `janus_get_spine(project)` — continuous per-project narrative.

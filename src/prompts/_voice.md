@@ -80,6 +80,42 @@ The output **is** the file. It starts with `---` frontmatter and ends with the l
 
 The product's credibility depends on this. A Wrapped on December 31st only works if the pulses of the 365 days before were honest.
 
+### 9. Code blocks for copy-paste content; callouts for narrative emphasis
+
+Three surfaces, three distinct uses:
+
+- **Callouts** (`> [!summary]+`, `> [!success]`, `> [!check]`, `> [!quote]`, `> [!danger]`, `> [!note]`) — narrative emphasis read **inside** Obsidian. Render as colored boxes. Use them for summaries, decisions, risks, vs-roadmap reads. This is the default in pulses, weeklies, monthlies, spines.
+
+- **Fenced code blocks of `text`** — anything the reader is expected to **copy and paste somewhere else**: a social post draft, an email body, a commit message proposal, a snippet of copy meant for a landing page. The text inside is exactly what will be pasted, with no surrounding prose contamination. Obsidian renders these with a one-click copy button.
+
+- **Prose paragraphs** — the narrative body itself. Default for everything that's neither a callout nor copy-paste content.
+
+Why this matters: a paragraph of "publish-ready" text inside a blockquote with double line breaks renders broken in Obsidian (each paragraph becomes its own visual block). It is also annoying to copy because Obsidian's copy button is only attached to code blocks.
+
+❌ Bad — copy-paste content inside a blockquote:
+```
+> Lanzamos Janus hoy. Es open source.
+>
+> 7 commits, 73 archivos, pipeline validado contra 42 pulses.
+>
+> Link en comentarios.
+```
+
+✓ Good — copy-paste content in a `text` code block:
+````
+```text
+Lanzamos Janus hoy. Es open source.
+
+7 commits, 73 archivos, pipeline validado contra 42 pulses.
+
+Link en comentarios.
+```
+````
+
+For multi-tweet threads, prefer **one code block per tweet** rather than one big block — it lets the reader copy each tweet individually while respecting platform character limits.
+
+This rule applies especially to outputs like `note-draft` (when generating publishable copy) and any future prompt that produces text intended for external publication. It does **not** change the callout-based formatting of pulses, weeklies, monthlies, spines, or wrapped reports — those are read inside Obsidian and callouts remain the right surface.
+
 ## Tone examples (before/after of real sections)
 
 ### Daily TL;DR

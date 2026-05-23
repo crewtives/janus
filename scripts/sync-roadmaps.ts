@@ -1,24 +1,34 @@
 #!/usr/bin/env bun
 /**
- * Sincroniza los _roadmap.md draft con la sección "Vs Roadmap" del pulse no-idle
- * más reciente de cada proyecto. NO toca user-editados (needs_review: false).
+ * Empareja los `_roadmap.md` del vault con la mejor fuente disponible por
+ * proyecto: `<repo>/ROADMAP.md` (preferente), pulse legacy con bullets, o
+ * deja un PENDIENTE explícito si no hay nada. No toca user-editados.
  *
  * Uso:
- *   bun run scripts/sync-roadmaps.ts            # todos los proyectos
+ *   bun run scripts/sync-roadmaps.ts            # aplica
  *   bun run scripts/sync-roadmaps.ts --dry-run  # preview
  */
 import { loadConfig } from "../src/config/loader.ts";
-import { syncRoadmapsFromPulses } from "../src/core/sync-roadmaps.ts";
+import { syncRoadmaps } from "../src/core/sync-roadmaps.ts";
 
 const dryRun = process.argv.includes("--dry-run");
 const config = await loadConfig();
-const result = await syncRoadmapsFromPulses({ projects: config.projects, dryRun });
+const result = await syncRoadmaps({ projects: config.projects, dryRun });
+
+const labels: Record<string, string> = {
+  "synced-from-repo": "✓ mirror del repo",
+  "synced-from-pulse": "✓ derivado de pulse",
+  "user-edited": "·  user-edited (skip)",
+  "pending-no-source": "!  PENDIENTE (sin fuente)",
+};
 
 for (const d of result.details) {
-  const tag = d.status === "synced" ? "✓ synced" : d.status === "user-edited" ? "✗ user-editado (skip)" : d.status === "no-source" ? "—  sin pulse no-idle" : "—  sin Vs Roadmap parseable";
+  const tag = labels[d.status] ?? d.status;
   const src = d.source ? ` ← ${d.source}` : "";
   console.log(`[sync-roadmaps] ${d.project.padEnd(24)} ${tag}${src}`);
 }
 
 const tag = dryRun ? " [DRY-RUN]" : "";
-console.log(`\n[sync-roadmaps] resumen${tag}: ${result.roadmapsSynced} sincronizados · ${result.roadmapsSkippedUserEdited} skip user-edit · ${result.roadmapsSkippedNoSource} sin source`);
+console.log(
+  `\n[sync-roadmaps] resumen${tag}: ${result.roadmapsSyncedFromRepo} desde repo · ${result.roadmapsSyncedFromPulse} desde pulse · ${result.roadmapsSkippedUserEdited} user-edit (skip) · ${result.roadmapsPendingNoSource} pendientes`,
+);

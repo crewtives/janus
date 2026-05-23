@@ -4,6 +4,20 @@ All notable changes to Janus are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.2.7] — 2026-05-23
+
+### Changed
+- **`sync-roadmaps` now prefers the project repo as the source of truth for each `_roadmap.md`.** Before, the only source was the `[!check] Vs Roadmap` callout in the latest non-idle pulse, parsed for bullets with emojis (✅ 🚧 ⏸️ ❓). That callout drifted to prose after the Phase 1A voice overhaul, leaving 0/7 projects parseable. The new flow per project is:
+  1. If `_roadmap.md` has `needs_review: false` → leave it alone (user-edited).
+  2. If `<repoPath>/ROADMAP.md` or `<repoPath>/docs/ROADMAP.md` (also lowercase variants) exists → mirror it into the vault. The repo file is the source of truth.
+  3. Fallback to the legacy bullet-with-emoji pulse parser.
+  4. Otherwise → write a visible `PENDIENTE` placeholder explaining what's missing and where to put it.
+
+  The API renamed `syncRoadmapsFromPulses` → `syncRoadmaps`. The old name is kept as an alias for back-compat.
+
+### Added
+- `syncRoadmaps` now requires `repoPath` on each project (already present in `ProjectConfig`). The script `scripts/sync-roadmaps.ts` was updated; the orchestrator's auto-trigger path is unchanged in surface.
+
 ## [0.2.6] — 2026-05-23
 
 ### Fixed

@@ -28,7 +28,7 @@ describe("template", () => {
     expect(PROMPT_VERSION).toBe("v8");
   });
 
-  test("loadVoiceSpec returns a non-empty string with the 8 hard rules", async () => {
+  test("loadVoiceSpec returns a non-empty string with the 10 hard rules", async () => {
     const spec = await loadVoiceSpec();
     expect(spec).toBeString();
     expect(spec.length).toBeGreaterThan(500);

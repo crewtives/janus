@@ -4,6 +4,12 @@ All notable changes to Janus are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.2.8] — 2026-05-29
+
+### Added
+- **Voice rule 10 — anti-slop prose.** The shared voice spec (`src/prompts/_voice.md`) now imports the copy-quality checklist from [impeccable.style/slop](https://impeccable.style/slop/), adapted to prose, and applies it to every output through the single `<%= it.voice %>` injection point. Two tiers keyed to rule 9's surface split: strict for publication-bound copy (`note-draft`, copy-paste blocks), tolerant inside the Obsidian narrative but held to a floor so any single sentence lifted into a post is publication-safe. Covers em-dash discipline, manufactured-contrast cadence, marketing buzzwords, and theater framing; defers concreteness to rule 5 and buzzwords-as-adjectives to rule 4 instead of duplicating. The doc's own line-3 opener — itself a fabricated-contrast triplet the rule penalizes — was softened so the spec obeys its own rules.
+- **Voice rule 9 — code blocks for copy-paste content vs callouts for narrative.** Anything the reader is expected to copy elsewhere (a social post draft, a commit-message proposal, landing copy) renders in a fenced `text` block instead of a blockquote, so Obsidian's one-click copy button works and publish-ready text doesn't render broken inside a callout. Pulses, weeklies, monthlies, spines, and wrapped keep their callout formatting.
+
 ## [0.2.7] — 2026-05-23
 
 ### Changed

@@ -385,7 +385,10 @@ async function processProject(args: {
   }
 
   let content: string;
-  const runner = resolveRunner(config);
+  // Pass repoPath so the privacy layer can collapse absolute repo paths in the
+  // raw session transcripts to `<repo>` (documented in docs/PRIVACY.md). Without
+  // it the `<repo>` substitution is dead — paths only ever collapse to `~`.
+  const runner = resolveRunner(config, project.repoPath);
   try {
     const claudeResult = await runner.run({
       prompt,

@@ -9,6 +9,7 @@ If both files exist, **AGENTS.md is the source of truth for repo conventions**. 
 1. [AGENTS.md](AGENTS.md) — repo map, conventions, non-obvious decisions.
 2. [docs/HANDOFF.md](docs/HANDOFF.md) — the single best onboarding document. Phase 1 + 2 + 3 history, session log, gotchas.
 3. [CONTRIBUTING.md](CONTRIBUTING.md) — human contributor guide, useful for the dev loop and PR review expectations.
+4. [docs/solutions/](docs/solutions/) — documented solutions to past bugs, recurring fixes, architecture patterns, conventions, and best practices. Each doc has YAML frontmatter (`module`, `tags`, `problem_type`). Relevant when touching runners, pipeline, MCP, prompts, scaffolding, init, distribution — search this before redoing investigation work.
 
 ## Claude-specific tips
 

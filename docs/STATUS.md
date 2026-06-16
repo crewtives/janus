@@ -2,6 +2,17 @@
 
 Product status snapshot as of **2026-05-22**, after shipping Phase 1 + 2 + 3 (full original roadmap).
 
+> **Update 2026-06-16 (v0.2.8).** The original roadmap is still closed; everything
+> below Phase 3 holds. What shipped *after* this snapshot is captured in
+> [`CHANGELOG.md`](../CHANGELOG.md) — the live source of truth — and includes: the
+> **privacy/redaction layer** (`src/core/privacy/`, wired in `resolveRunner`),
+> **standalone-binary distribution** (curl one-liner + public Homebrew tap +
+> `release.yml` building four platform binaries), **in-process vault scaffolding**
+> (`src/core/scaffold/`, replacing the spawn-based scripts described below), the
+> MCP `serverInfo.version` fix, `sync-roadmaps`, **Discord** notifications, and
+> i18n. The suite is now **382 tests** (not 348). Code-signing and `npm publish`
+> remain scaffolded-but-off pending external credentials (see `ROADMAP.md`).
+
 ## Positioning
 
 Janus is **the maker's personal historian**. It reads your work (git + Claude Code sessions) and writes the **continuous narrative** of your projects in a temporal hierarchy: daily → weekly → monthly → quarterly → yearly → spine. That narrative is **queryable via MCP** by other agents — Claude Code in other sessions can ask Janus "what did we do in X last week?" and get synthesized context, not raw logs.
@@ -39,6 +50,11 @@ Cursor sessions, Codex sessions, Linear, voice memos (Whisper), Calendar — all
 - Janus vs companion-agent doc in `docs/mcp.md`
 
 ### Vault scaffolding (post-Phase 1) ✅
+
+> Since commit `7d9c565` this logic lives **in-process** under `src/core/scaffold/`
+> (called directly by the orchestrator), not via `bun spawn` of the standalone
+> scripts listed here — the spawn form broke under the compiled binary and
+> launchd. The scripts below remain as the manual/CLI entry points.
 
 Closing the gap detected during e2e: hubs/MOCs/dashboards weren't being generated automatically. Now they are:
 
@@ -82,7 +98,7 @@ Detected during 7d backfill: with flat concurrency 2, dates from the same projec
 
 ### Tests
 
-- **348 / 348 passing** (110 new between Phase 2 and Phase 3)
+- **382 / 382 passing** as of 2026-06-16 (was 348 / 348 at the Phase 3 close)
 - Clean typecheck
 - Smoke validation script (`scripts/smoke-validate-phase1.ts`) with 14 checks, no LLM
 
@@ -96,7 +112,7 @@ Detected during 7d backfill: with flat concurrency 2, dates from the same projec
 | U4 — Pattern detection LLM | `pattern-detector.ts` + `pattern-detection.v2.md` | confidence ≥ 0.6 |
 | U5 — Reflection prompts (weekly) | `weekly-rollup.v5.md` + `question-preserve.ts` | preserves user answers |
 | U6 — Reflection prompts (monthly) | `monthly-digest.v4.md` | analogous to U5 |
-| U7 — Anniversary detection | `anniversaries.ts` + `daily-pulse.v7.md` | trigger callout + per-project Wrapped |
+| U7 — Anniversary detection | `anniversaries.ts` + `daily-pulse.v8.md` | trigger callout + per-project Wrapped |
 | U8 — "This day, last year" (daily) | `anchors.ts` + `daily-rollup.v5.md` | Timeline/Daily lookup |
 | U9 — Anniversary per-project anchor | `anchors.ts` (shared) | pulse and _archive lookup |
 
@@ -107,7 +123,7 @@ New table: `blocker_history(blocker_hash, project, first_seen, last_seen, weekly
 | IU | Files | Notes |
 |---|---|---|
 | U1 — Aggregator | `src/core/wrapped/aggregator.ts` + `types.ts` | metrics, top tracks/decisions, biggest week, birthdays, themes |
-| U2 — Yearly renderer | `renderer.ts` + `wrapped-yearly.v2.md` | output `Wrapped/Wrapped-YYYY.md` |
+| U2 — Yearly renderer | `renderer.ts` + `wrapped-yearly.v3.md` | output `Wrapped/Wrapped-YYYY.md` |
 | U3 — Personality | `personality.ts` + `wrapped-personality.v2.md` | 6 archetypes + Hybrid, deterministic + LLM |
 | U4 — Per-project Wrapped | `renderer.ts` (project scope) + `wrapped-project.v2.md` | auto-trigger on anniversary |
 | U5 — HTML | `html.ts` + `src/templates/wrapped.html/.css` | self-contained, embedded CSS |

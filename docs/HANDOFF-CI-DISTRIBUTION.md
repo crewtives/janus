@@ -7,6 +7,17 @@ scope: task-specific (CI + release automation + distributable binary)
 
 # Handoff — CI + binary distribution
 
+> **SUPERSEDED 2026-06-16 — historical record only.** The work this brief scopes
+> is **done**. As of v0.2.8: CI is live, `release.yml` builds four platform
+> binaries on tag push, prompts *and* the wrapped HTML/CSS templates are embedded
+> via import attributes so `bun build --compile` produces a working binary, there
+> is a public Homebrew tap with an automated multi-platform bump
+> (`scripts/bump-homebrew-formula.ts`), and the repo is public with a working
+> `curl | bash` installer. Treat the "defer distribution", "no release workflow",
+> "no Homebrew tap" and "10 `Bun.file` callsites to migrate" notes below as the
+> problem statement that was *solved*, not the current state. Live status:
+> `CHANGELOG.md` + `ROADMAP.md`.
+
 Self-contained brief for another Claude Code session (or another coding agent) to set up CI/CD and a distributable binary for Janus. Read it in full before doing anything. The general project status lives in [`docs/HANDOFF.md`](HANDOFF.md) — this doc is task-specific.
 
 ## Coordinates

@@ -28,11 +28,21 @@ APPLE_ID
 
 Requires an Apple Developer Program membership.
 
-### Multi-platform Homebrew bump
+### Multi-platform Homebrew bump · ✅ DONE (2026-06-16)
 
-The `homebrew-bump` job in `release.yml` uses `mislav/bump-homebrew-formula-action`, which is single-platform: it only updates the one block whose `download-url` is passed to it. The other three blocks (currently `macos-x64`, `linux-arm64`, `linux-x64`) keep their previous SHA256 sums while the version label moves, which makes `brew install` fail on those platforms.
+Resolved. The `homebrew-bump` job in `release.yml` no longer uses the
+single-platform `mislav/bump-homebrew-formula-action` (which patched only the one
+`sha256` block it was handed and left the other three stale, breaking `brew
+install`'s checksum on every platform but one from v0.2.4). It now runs
+`scripts/bump-homebrew-formula.ts` — pure logic in `src/core/homebrew-formula.ts`,
+covered by `tests/homebrew-formula.test.ts` — which reads the release's
+`SHA256SUMS` and patches `version` plus all four `sha256` lines atomically, then
+commits to the tap.
 
-Replace the action with a small inline step (sed / yq / a short Bun script) that reads the published `SHA256SUMS` for the new tag and patches all four `sha256` lines in `Formula/janus.rb` atomically before committing to the tap.
+**One-time cleanup pending**: the live `Formula/janus.rb` in `crewtives/homebrew-tap`
+is still stale from the old action (v0.2.4–v0.2.8). It self-heals on the next
+release tag, or fix it immediately by running the script against a checkout of
+the tap with the current release's `SHA256SUMS`.
 
 ### `npm publish` — `bunx janus` / `npx janus`
 
@@ -45,13 +55,27 @@ Workflow already exists at `.github/workflows/npm-publish.yml`, guarded by `if: 
 
 Multi-source ingestion was scoped as **Phase 1B** and explicitly deferred in [`docs/STATUS.md`](docs/STATUS.md) — every source below needs interactive setup or local data that wasn't available during the original phase. None of them block the current product; they all expand what Janus can see beyond `git log` and Claude Code session transcripts.
 
-### Cursor sessions
-
-Cursor stores session history locally (path varies by OS). A `src/ingest/cursor.ts` adapter that mirrors `src/ingest/claude-code.ts` would let the daily-pulse prompt see Cursor work alongside Claude Code work in the same project window.
+**Prerequisite — an ingest abstraction first.** There is no `src/ingest/` yet:
+session reading lives in `src/core/sessions.ts`, hardcoded to `~/.claude/projects`,
+`SessionSummary` has no `source` field, and the daily-pulse prompt hardcodes the
+`## Claude Code sessions` heading. Adding any second source is a small refactor
+(extract an `IngestAdapter` + a `source` discriminator + generalize the prompt
+heading), not just dropping in a new file. Do that once, then each source below
+is an adapter.
 
 ### Codex sessions
 
-Same shape as Cursor, different source path. Adapter in `src/ingest/codex.ts`. The daily-pulse aggregator already treats "session transcripts" as a list — multiple adapters compose naturally.
+The cheapest first source: same `.jsonl` shape as Claude Code, different path
+(`~/.codex/sessions/`). Once the ingest abstraction above exists, this is a
+`src/ingest/codex.ts` adapter. Needs local data — the user must have Codex CLI
+sessions on disk to validate — but no credential or interactive setup.
+
+### Cursor sessions
+
+Cursor stores session history locally in a proprietary SQLite store (path varies
+by OS, format reverse-engineered, no stable API). A `src/ingest/cursor.ts`
+adapter, after the abstraction, would fold Cursor work into the same project
+window. Heavier than Codex because of the SQLite reverse-engineering.
 
 ### Linear
 

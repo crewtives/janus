@@ -8,6 +8,20 @@ last_updated: 2026-05-22 (post-CI + dash-rename session)
 
 Self-contained document so another Claude Code session (or another coding agent) can continue the work without prior context. Read it in full before doing anything.
 
+> **Update 2026-06-16 (v0.2.8) — read this first.** Several claims below were true
+> on 2026-05-22 and have since changed. Corrections, with [`CHANGELOG.md`](../CHANGELOG.md)
+> as the live source of truth:
+> - **The repo is PUBLIC**, not private — the `curl | bash` installer one-liner works.
+> - **The privacy/redaction layer EXISTS** (`src/core/privacy/`, wired in
+>   `resolveRunner`). "Possible next steps · C" below is already shipped.
+> - **Standalone-binary distribution is live**: prompts *and* the wrapped HTML/CSS
+>   templates are embedded via import attributes, so `bun build --compile` produces
+>   a working binary (pulse + wrapped, including `--format html`); `release.yml`
+>   builds four platform binaries and bumps a public Homebrew tap. The "defer
+>   distribution" notes in the session log and `HANDOFF-CI-DISTRIBUTION.md` are obsolete.
+> - **Tests: 382 / 382** (the 348/349 figures below are stale).
+> - Code-signing + `npm publish` stay scaffolded-but-off pending external credentials.
+
 ## The product in one line
 
 Janus is **the maker's personal historian**: it reads your work (git + Claude Code sessions) and writes the **continuous narrative** of your projects in a temporal hierarchy (daily → weekly → monthly → quarterly → yearly → spine). That narrative is **queryable via MCP** by other agents — Claude Code in other sessions asks Janus "what did we do in X last week?" and gets synthesized context, not raw logs.
@@ -18,9 +32,9 @@ Starting with Phase 3, the system **harvests the narrative**: it generates the a
 
 ## Coordinates
 
-- **Repo**: https://github.com/crewtives/janus · **private** since 2026-05-22 (it was briefly public to validate the installer one-liner end-to-end; switched back to private after the test). To clone locally: `gh repo clone crewtives/janus` with `gh` authenticated.
+- **Repo**: https://github.com/crewtives/janus · **public**. To clone: `gh repo clone crewtives/janus`.
 - **CI**: GitHub Actions, see `.github/workflows/ci.yml`. Green on ubuntu-latest + macos-latest as of merge of `#3`.
-- **Typical local path**: `~/janus`. **The installer one-liner (`curl|bash`) no longer works for anonymous users** while the repo is private — `raw.githubusercontent.com` returns 404. If we open it up to other makers, we need to flip back with `gh repo edit crewtives/janus --visibility public` (reversible change, non-destructive).
+- **Typical local path**: `~/janus`. The installer one-liner (`curl | bash` via `scripts/install-binary.sh`) works for anonymous users now that the repo is public.
 - **Obsidian vault**: `~/Obsidian` (default)
 - **Janus state**: `<repo>/.janus/` (gitignored — checkpoint, search index, logs)
 - **Primary provider**: Claude Code (`claude -p` headless, OAuth Max)
@@ -61,7 +75,7 @@ Extras: cross-platform scheduler · installer one-liner · auto-pulse launchd ·
 | **U4 — Pattern detection LLM** | ✅ | `pattern-detector.ts` + prompt `pattern-detection.v2.md` | JSON output, filter by confidence ≥ 0.6 |
 | **U5 — Reflection prompts (weekly)** | ✅ | `weekly-rollup.v5.md` + `question-preserve.ts` | Preserves user answers |
 | **U6 — Reflection prompts (monthly)** | ✅ | `monthly-digest.v4.md` | Analogous to U5 |
-| **U7 — Anniversary detection** | ✅ | `anniversaries.ts` + `daily-pulse.v7.md` | Trigger callout + per-project Wrapped |
+| **U7 — Anniversary detection** | ✅ | `anniversaries.ts` + `daily-pulse.v8.md` | Trigger callout + per-project Wrapped |
 | **U8 — "This day, last year" (daily)** | ✅ | `anchors.ts` | Lookup in `Timeline/Daily/<year-1>-MM-DD.md` |
 | **U9 — Per-project anniversary anchor** | ✅ | `anchors.ts` (shared) | Lookup in `Projects/<x>/pulse/<year-1>-MM-DD-<x>.md` |
 
@@ -98,7 +112,7 @@ bun janus wrapped --year YYYY --format png   # PNG (requires puppeteer installed
 
 ## Tests
 
-**348 tests passing** (was 268 at end of Phase 1). Clean typecheck.
+**382 tests passing** (was 268 at end of Phase 1). Clean typecheck.
 
 New test files in Phase 2 + 3:
 - `tests/reflection-anniversaries.test.ts`
@@ -115,7 +129,7 @@ New test files in Phase 2 + 3:
 - `tests/wrapped-trickle.test.ts`
 
 ```bash
-bun test                                        # 348 tests, ~1s
+bun test                                        # 382 tests, ~1s
 bunx tsc --noEmit                               # typecheck
 bun run scripts/smoke-validate-phase1.ts        # 14 checks, no LLM
 ```
@@ -240,7 +254,7 @@ src/templates/
 src/commands/wrapped.ts   (U8)
 
 src/prompts/ (new in Phase 2+3)
-├── daily-pulse.v7.md
+├── daily-pulse.v8.md
 ├── daily-rollup.v5.md
 ├── weekly-rollup.v5.md
 ├── monthly-digest.v4.md
@@ -260,8 +274,12 @@ Deferred in Phase 1. Cursor/Codex/Linear/voice memos/Calendar. Requires interact
 ### B — Eval and LLM output polish
 Phase 3 introduces 3 new prompts (`wrapped-yearly`, `wrapped-project`, `wrapped-personality`) and 1 from Phase 2 (`pattern-detection`). Side-by-side eval against real outputs is still pending before the first real Wrapped (Dec 2026). Reuse `scripts/eval-prompt-voice.ts` as the pattern.
 
-### C — Privacy / redaction layer
-Before scaling to more users: redact PII / secrets from JSONL sessions before including them in pulses. Does not exist yet.
+### C — Privacy / redaction layer ✅ SHIPPED
+Redacts PII / secrets and collapses paths in every prompt before it reaches the
+LLM. Lives in `src/core/privacy/redact.ts`, wired bypass-resistant via
+`src/runners/redacting.ts` in `resolveRunner()`. Opt out with
+`config.privacy.enabled = false`. See `docs/PRIVACY.md`. Follow-up (optional):
+broaden the pattern set (Stripe/Twilio/etc.) and add per-pattern hit counts.
 
 ### D — Minimal landing + public demo
 Real Wrapped as the viral hook. Needs 1 year of data + 1 real Wrapped for a demo. The first real Wrapped is Dec 2026 (~7 months).
@@ -280,7 +298,7 @@ If the new session introduces a catastrophic bug, there's a rollback path to pre
 
 - Phase 1 + 2 + 3 SHIPPED. Original roadmap complete.
 - CI on GitHub Actions (ubuntu + macOS) is green and required reading: every PR runs it.
-- 349 / 349 tests passing on `main` (348 originals + 1 launchd platform-guard test added during CI bring-up). Clean typecheck.
+- 382 / 382 tests passing on `main` (as of 2026-06-16; was 349 at the Phase 3 close). Clean typecheck.
 - Pulse filenames use single-dash separator (`YYYY-MM-DD-<project>.md`) as of `7434155` (2026-05-22).
 - Janus moved from "passive historian" to "reflective coach" (Phase 2) and to "narrator with annual harvest" (Phase 3).
 - The Wrapped CLI works end-to-end against production vault data (dry-run validated post-rename).

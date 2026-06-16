@@ -155,6 +155,7 @@ These look like oversights until you understand them. Read [docs/HANDOFF.md § N
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — diagrams, technical decisions, vault layout.
 - [docs/STATUS.md](docs/STATUS.md) — what's shipped per phase.
 - [docs/mcp.md](docs/mcp.md) — MCP server usage.
+- [docs/solutions/](docs/solutions/) — documented solutions to past problems (bugs, best practices, conventions, architecture patterns), organized by category with YAML frontmatter (`module`, `tags`, `problem_type`). Relevant when implementing or debugging in documented areas (runners, pipeline, MCP, prompts, scaffolding, init, distribution).
 
 ## Communication
 

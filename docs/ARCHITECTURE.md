@@ -36,7 +36,7 @@ flowchart TD
         git[Git log + diff<br/>src/core/git.ts]
         sessions[Claude Code sessions<br/>~/.claude/projects/*.jsonl]
         ctx[STRATEGY.md<br/>_roadmap.md<br/>README.md<br/>CLAUDE.md<br/>previous pulses]
-        prompt["Eta render<br/>daily-pulse.v7.md"]
+        prompt["Eta render<br/>daily-pulse.v8.md"]
         claude["claude -p headless<br/>src/core/claude.ts<br/>(strips ANTHROPIC_API_KEY)"]
     end
 
@@ -82,7 +82,7 @@ flowchart TD
 |---------|----------|--------------|
 | `init` | Interactive onboarding wizard. Detects auth, vault, projects. Optionally installs launchd. | — |
 | `discover` | Detects new git repos in `discoverRoots`. `--apply` adds them to the config. | — |
-| `pulse` | Generates a daily pulse for each project. Closes the day with consolidated rollup + enrich + scaffold + Discord. | `daily-pulse.v7`, `daily-rollup.v5` |
+| `pulse` | Generates a daily pulse for each project. Closes the day with consolidated rollup + enrich + scaffold + Discord. | `daily-pulse.v8`, `daily-rollup.v5` |
 | `rollup --week` | Cross-project weekly consolidation + materializes tracks + regenerates spines. | `weekly-rollup.v5` |
 | `monthly` | Monthly digest. Archives the month's pulses to `_archive/`. | `monthly-digest.v4` |
 | `quarterly` | Quarterly retrospective consolidating the monthlies. | `quarterly-retro.v3` |
@@ -92,6 +92,8 @@ flowchart TD
 | `index` | Rescans + rebuilds the FTS5 index. | — |
 | `mcp` | Starts the MCP stdio server. 4 tools: ask, get_spine, get_pulse, list_projects. | — |
 | `note <topic>` | Generates a Note draft for the portfolio (crewtives.com/notes/ style). Reads relevant material from the vault via FTS5 + voice spec + few-shot from the portfolio. | `note-draft.v2` |
+| `wrapped --year YYYY` | Annual retrospective (cross-project or `--project`); `--format markdown\|html\|png`. | `wrapped-yearly.v3`, `wrapped-project.v2`, `wrapped-personality.v2` |
+| `demo` | Generates a throwaway sample vault + Wrapped to preview output without real data. | — |
 | `adr` | Manages ADRs (Architecture Decision Records). | — |
 | `archive-tracks` | TTL for tracks not mentioned in the last N weeklies. | — |
 | `doctor` | 14+ validations (git, claude, Max auth, paths, etc.). | — |
@@ -231,7 +233,7 @@ Obsidian works local-first over plain markdown. That means:
 - Composable with scripts (`enrich-vault.ts`, `fix-broken-links.ts`,
   `sync-roadmaps.ts`).
 
-### Why versioned prompts (`daily-pulse.v7.md`)
+### Why versioned prompts (`daily-pulse.v8.md`)
 
 Each prompt goes to a file with a `.vN.md` suffix. That lets us:
 - Iterate without losing previous versions (commit history).
@@ -320,7 +322,7 @@ sequenceDiagram
     loop per project (concurrency 2)
         loop per date (serial within project)
             O->>O: gather git + sessions + context + voice spec
-            O->>O: render prompt (Eta + daily-pulse.v7)
+            O->>O: render prompt (Eta + daily-pulse.v8)
             O->>C: spawn claude -p
             C->>C: agent loop (can read repo files)
             C-->>O: markdown output
@@ -354,6 +356,11 @@ sequenceDiagram
 
 ## Privacy and security
 
+- **Redaction layer**: `src/core/privacy/redact.ts` strips secrets/PII (API keys,
+  tokens, emails) and collapses paths (`$HOME` → `~`, repo root → `<repo>`) from
+  every prompt. It's wired in `resolveRunner()` via `src/runners/redacting.ts`, a
+  bypass-resistant chokepoint — any caller that goes through the registry is
+  covered. Opt out with `config.privacy.enabled = false`. See `docs/PRIVACY.md`.
 - **Discord webhook** is bearer-equivalent: `.gitignore` covers
   `config.local.*` (including `*.bak.*` backups) since commit `92fe82e`.
 - **Claude Max auth** lives in the macOS Keychain, never on disk or in config.

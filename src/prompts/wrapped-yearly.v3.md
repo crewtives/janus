@@ -39,7 +39,7 @@ decisions: {{decisionsCanonical}}
 personality: "{{personalityArchetype}}"
 tags: [wrapped, wrapped/yearly, wrapped/{{year}}]
 aliases: ["Janus Wrapped {{year}}"]
-prompt_version: v2
+prompt_version: v3
 ---
 ```
 

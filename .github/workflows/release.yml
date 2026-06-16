@@ -116,6 +116,13 @@ jobs:
           ls -la
           sha256sum janus-* > SHA256SUMS
           cat SHA256SUMS
+      # Hand SHA256SUMS to homebrew-bump as a workflow artifact, so it doesn't
+      # depend on the published release asset having propagated yet.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SHA256SUMS
+          path: artifacts/SHA256SUMS
+          if-no-files-found: error
       - uses: softprops/action-gh-release@v3
         with:
           files: |
@@ -130,18 +137,47 @@ jobs:
   # Bump the Homebrew formula in crewtives/homebrew-tap after a release.
   # Activated 2026-05-23 (v0.2.4 onward). Requires the HOMEBREW_TAP_GITHUB_TOKEN
   # secret — a fine-grained PAT with Contents: read/write on crewtives/homebrew-tap.
+  #
+  # Replaces mislav/bump-homebrew-formula-action, which is single-platform: it
+  # only rewrites the one sha256 it's handed and leaves the other three stale,
+  # breaking `brew install`'s checksum on every platform but one (shipped live
+  # from v0.2.4). scripts/bump-homebrew-formula.ts patches version + all four
+  # sha256 atomically. The script + its core module import only node built-ins,
+  # so no `bun install` is needed.
   homebrew-bump:
     needs: release
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Bump formula
-        uses: mislav/bump-homebrew-formula-action@v3
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
         with:
-          formula-name: janus
-          formula-path: Formula/janus.rb
-          homebrew-tap: crewtives/homebrew-tap
-          tag-name: ${{ github.ref_name }}
-          download-url: https://github.com/crewtives/janus/releases/download/${{ github.ref_name }}/janus-macos-arm64
-        env:
-          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          bun-version: 1.3.14
+      - name: Checkout tap
+        uses: actions/checkout@v6
+        with:
+          repository: crewtives/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          path: tap
+      - uses: actions/download-artifact@v4
+        with:
+          name: SHA256SUMS
+          path: .
+      - name: Patch formula (all four platforms)
+        run: |
+          bun run scripts/bump-homebrew-formula.ts \
+            --version "${GITHUB_REF_NAME#v}" \
+            --sums SHA256SUMS \
+            --formula tap/Formula/janus.rb
+      - name: Commit + push tap
+        working-directory: tap
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- Formula/janus.rb; then
+            echo "Formula already up to date — nothing to push."
+            exit 0
+          fi
+          git add Formula/janus.rb
+          git commit -m "janus ${GITHUB_REF_NAME}: bump version + all four sha256"
+          git push

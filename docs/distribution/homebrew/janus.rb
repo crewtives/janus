@@ -8,9 +8,11 @@
 #
 # How the file gets updated:
 #   - On every Janus release (tag push), the `homebrew-bump` job in
-#     .github/workflows/release.yml uses `mislav/bump-homebrew-formula-action`
-#     to compute the new SHA256 of the platform binaries and open a PR against
-#     the tap repo bumping `version` + `sha256` here.
+#     .github/workflows/release.yml runs scripts/bump-homebrew-formula.ts, which
+#     reads the release's SHA256SUMS and patches `version` plus ALL FOUR
+#     per-platform `sha256` lines below atomically, then commits straight to the
+#     tap's main branch. (The earlier mislav/bump-homebrew-formula-action only
+#     patched one block, leaving the other three stale — see the script header.)
 #
 # Manual bootstrap steps (one-time, before the auto-bump can work):
 #   1. Create the tap repo:    gh repo create crewtives/homebrew-tap --public

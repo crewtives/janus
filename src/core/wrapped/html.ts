@@ -12,7 +12,7 @@
  * Inter Tight; cero esquinas redondeadas; cero gradientes; cero sombras.
  */
 import { join } from "node:path";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import type {
   WrappedData,
   TopTrack,
@@ -20,8 +20,16 @@ import type {
   PersonalitySignals,
 } from "./types.ts";
 import type { JanusConfig } from "../../config/types.ts";
+import wrappedHtmlTemplateRaw from "../../templates/wrapped.html" with { type: "text" };
+import wrappedCssRaw from "../../templates/wrapped.css" with { type: "text" };
 
-const TEMPLATE_DIR = join(import.meta.dir, "..", "..", "templates");
+// Embedded via import attributes (not readFile) so the templates survive
+// `bun build --compile`: under --compile the templates/ dir isn't on disk and a
+// readFile resolves to /$bunfs/...wrapped.html → ENOENT. Bun types .html/.css
+// imports as bundles even with `type: "text"`; the cast reflects that at runtime
+// the attribute wins and we get the file contents as a string.
+const wrappedHtmlTemplate = wrappedHtmlTemplateRaw as unknown as string;
+const wrappedCss = wrappedCssRaw as unknown as string;
 
 export interface RenderHtmlOptions {
   data: WrappedData;
@@ -44,8 +52,8 @@ export async function renderWrappedHtml(opts: RenderHtmlOptions): Promise<{ path
 }
 
 export async function renderWrappedHtmlString(d: WrappedData): Promise<string> {
-  const tpl = await readFile(join(TEMPLATE_DIR, "wrapped.html"), "utf-8");
-  const css = await readFile(join(TEMPLATE_DIR, "wrapped.css"), "utf-8");
+  const tpl = wrappedHtmlTemplate;
+  const css = wrappedCss;
 
   const titleSuffix = d.scope === "project" ? ` — ${escapeHtml(d.target)}` : "";
   const archetype = d.personality?.archetype ?? "Unclassified";

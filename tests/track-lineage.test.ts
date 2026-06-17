@@ -1,6 +1,6 @@
 import { describe, expect, test, beforeEach, afterEach } from "bun:test";
 import { Checkpoint } from "../src/core/checkpoint.ts";
-import { dateFromSourceFilename, recordTrackLineage } from "../src/core/tracks.ts";
+import { dateFromSourceFilename, normalizeTrackStatus, recordTrackLineage } from "../src/core/tracks.ts";
 
 let cp: Checkpoint;
 
@@ -33,6 +33,35 @@ describe("dateFromSourceFilename", () => {
   });
 });
 
+describe("normalizeTrackStatus", () => {
+  test("real prose observed in production maps to the enum", () => {
+    expect(normalizeTrackStatus("completado — sin STRATEGY.md formal")).toBe("completed");
+    expect(normalizeTrackStatus("completado — WAF de Cloudflare requiere toggle manual para agentes")).toBe("completed");
+    expect(normalizeTrackStatus("con blockers — AstroPay live sin payment methods habilitados")).toBe("open");
+    expect(normalizeTrackStatus("on-track — blocker puntual en SSE HMAC↔Bearer")).toBe("open");
+  });
+
+  test("a 'complete' word in the gloss does not flip an in-progress track", () => {
+    expect(normalizeTrackStatus("on-track — falta completar el endpoint")).toBe("open");
+  });
+
+  test("already-enum values pass through; empty/unknown default to open", () => {
+    expect(normalizeTrackStatus("open")).toBe("open");
+    expect(normalizeTrackStatus("completed")).toBe("completed");
+    expect(normalizeTrackStatus("archived")).toBe("archived");
+    expect(normalizeTrackStatus("—")).toBe("open");
+    expect(normalizeTrackStatus("")).toBe("open");
+    expect(normalizeTrackStatus(undefined)).toBe("open");
+  });
+
+  test("english + spanish completion/archival synonyms", () => {
+    expect(normalizeTrackStatus("done: shipped to prod")).toBe("completed");
+    expect(normalizeTrackStatus("cerrado")).toBe("completed");
+    expect(normalizeTrackStatus("archivado por TTL")).toBe("archived");
+    expect(normalizeTrackStatus("abandonado — descartado")).toBe("archived");
+  });
+});
+
 describe("recordTrackLineage", () => {
   test("first record inserts first_seen = last_mentioned and count=1", () => {
     recordTrackLineage({
@@ -46,7 +75,9 @@ describe("recordTrackLineage", () => {
     expect(rows[0]?.firstSeen).toBe("2026-05-19");
     expect(rows[0]?.lastMentioned).toBe("2026-05-19");
     expect(rows[0]?.mentionsCount).toBe(1);
-    expect(rows[0]?.status).toBe("on-track");
+    // "on-track" is in-progress prose → normalized to the `open` enum so
+    // open-loop detection can see it (it matches status === "open").
+    expect(rows[0]?.status).toBe("open");
   });
 
   test("second record with later date increments count and updates last_mentioned", () => {

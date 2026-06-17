@@ -1,7 +1,27 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { Checkpoint } from "./checkpoint.ts";
+import type { Checkpoint, TrackStatus } from "./checkpoint.ts";
+
+/**
+ * Maps the weekly's free-text "Status at close" (e.g. "completado — sin
+ * STRATEGY.md formal", "on-track — blocker puntual en X", "con blockers — …")
+ * to the `track_lineage` enum. Reads only the label before the first dash/colon
+ * separator, so a gloss like "on-track — falta completar X" is not misread as
+ * completed. Anything not clearly completed/archived stays `open`. Without this,
+ * the prose was persisted verbatim and `detectOpenTrackLoops` (which matches
+ * `status === "open"`) never fired — open-loop detection was dead in production.
+ */
+export function normalizeTrackStatus(raw: string | undefined): TrackStatus {
+  const head = (raw ?? "")
+    .split(/[—–:]|--| - /)[0]!            // status label before any gloss
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s-]/gu, "")    // strip emoji/punctuation
+    .trim();
+  if (head === "archived" || /^(archiv|abandon|descartad|dropped|wontfix)/.test(head)) return "archived";
+  if (head === "completed" || /^(complet|done|shipped|cerrad|closed|finished|resuelto|entregad)/.test(head)) return "completed";
+  return "open";
+}
 
 export interface TrackSpec {
   emoji: string;
@@ -154,13 +174,14 @@ export function recordTrackLineage(opts: {
     const project = t.projects[0] ?? "_cross-project_";
     // Record once per (slug, project) — if the track lists multiple
     // projects, record one entry per project.
+    const status = normalizeTrackStatus(t.status);
     if (t.projects.length === 0) {
-      opts.checkpoint.recordTrackMention({ slug: t.slug, project, date, status: t.status || "open" });
+      opts.checkpoint.recordTrackMention({ slug: t.slug, project, date, status });
       recorded += 1;
       continue;
     }
     for (const p of t.projects) {
-      opts.checkpoint.recordTrackMention({ slug: t.slug, project: p, date, status: t.status || "open" });
+      opts.checkpoint.recordTrackMention({ slug: t.slug, project: p, date, status });
       recorded += 1;
     }
   }

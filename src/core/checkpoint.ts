@@ -4,6 +4,21 @@ import { join } from "node:path";
 
 export type PulseStatus = "pending" | "in_progress" | "done" | "failed";
 
+/** Lifecycle of a track in `track_lineage`. */
+export type TrackStatus = "open" | "archived" | "completed";
+
+/**
+ * Enum guard for `track_lineage.status`. Anything that isn't a recognised
+ * non-default value collapses to `open` — the conservative default that keeps a
+ * track visible to open-loop detection. This is the persistence-boundary lock:
+ * domain code (`normalizeTrackStatus` in tracks.ts) maps the weekly's free-text
+ * "Status at close" prose to the enum; this stops any other caller from writing
+ * prose into the column (the bug that left open-loop detection dead).
+ */
+export function coerceTrackStatus(s: string | undefined): TrackStatus {
+  return s === "completed" || s === "archived" ? s : "open";
+}
+
 export interface PulseRecord {
   project: string;
   date: string;
@@ -316,7 +331,7 @@ export class Checkpoint {
    * recorded — avoids double counting on regeneration).
    */
   recordTrackMention(opts: { slug: string; project: string; date: string; status?: string }): void {
-    const status = opts.status ?? "open";
+    const status = coerceTrackStatus(opts.status);
     const existing = this.db
       .query(`SELECT first_seen, last_mentioned, mentions_count, status FROM track_lineage WHERE slug = ?1 AND project = ?2`)
       .get(opts.slug, opts.project) as { first_seen: string; last_mentioned: string; mentions_count: number; status: string } | null;
@@ -361,7 +376,10 @@ export class Checkpoint {
       firstSeen: r.first_seen,
       lastMentioned: r.last_mentioned,
       mentionsCount: r.mentions_count,
-      status: r.status,
+      // Read-side guard: rows written before the enum fix hold prose. Coerce so
+      // consumers (open-loop detection, Wrapped counts) always see the enum even
+      // if the on-disk row was never re-mentioned and thus never migrated.
+      status: coerceTrackStatus(r.status),
     }));
   }
 

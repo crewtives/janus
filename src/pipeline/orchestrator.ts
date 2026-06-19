@@ -25,7 +25,11 @@ export interface RunPulseOptions {
   backfill?: string | undefined;
   project?: string | undefined;
   since?: string | undefined;
+  /** Process exactly this date (YYYY-MM-DD). Takes precedence over since/backfill. */
+  date?: string | undefined;
   dryRun?: boolean | undefined;
+  /** Reprocess even if a (project, date) is already marked done — overrides idempotency. */
+  force?: boolean | undefined;
 }
 
 export async function runPulse(opts: RunPulseOptions): Promise<void> {
@@ -40,6 +44,7 @@ export async function runPulse(opts: RunPulseOptions): Promise<void> {
   console.log(`[janus] projects: ${projects.map((p) => p.name).join(", ")}`);
   console.log(`[janus] dates: ${dates.join(", ")}`);
   console.log(`[janus] dry-run: ${opts.dryRun ? "yes" : "no"}`);
+  if (opts.force) console.log(`[janus] force: yes — reprocessing even if already done`);
 
   const stateDir = config.stateDir!;
   await mkdir(stateDir, { recursive: true });
@@ -104,7 +109,7 @@ export async function runPulse(opts: RunPulseOptions): Promise<void> {
     }
     const pendingDates: string[] = [];
     for (const date of dates) {
-      if (cp.isDone(project.name, date) && !opts.dryRun) {
+      if (cp.isDone(project.name, date) && !opts.dryRun && !opts.force) {
         console.log(`[${project.name}/${date}] skip — already done`);
         continue;
       }
@@ -540,7 +545,15 @@ function filterProjects(projects: ProjectConfig[], name?: string): ProjectConfig
   return projects.filter((p) => p.name === name);
 }
 
-function determineDates(opts: RunPulseOptions): string[] {
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+export function determineDates(opts: RunPulseOptions): string[] {
+  if (opts.date) {
+    if (!ISO_DATE_RE.test(opts.date)) {
+      throw new Error(`--date invalid: ${opts.date} (expected YYYY-MM-DD)`);
+    }
+    return [opts.date];
+  }
   if (opts.since) {
     return datesBetween(opts.since, todayLocal());
   }

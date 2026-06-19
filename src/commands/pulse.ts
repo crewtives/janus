@@ -18,9 +18,18 @@ export default defineCommand({
       type: "string",
       description: "Start date (YYYY-MM-DD)",
     },
+    date: {
+      type: "string",
+      description: "Process exactly this date (YYYY-MM-DD), ignoring since/backfill",
+    },
     "dry-run": {
       type: "boolean",
       description: "Write nothing, just show what would happen",
+      default: false,
+    },
+    force: {
+      type: "boolean",
+      description: "Reprocess even if already done (overrides idempotency)",
       default: false,
     },
   },
@@ -30,7 +39,9 @@ export default defineCommand({
       backfill: args.backfill,
       project: args.project,
       since: args.since,
+      date: args.date,
       dryRun: args["dry-run"],
+      force: args.force,
     });
   },
 });

@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { JanusConfig, ProjectConfig } from "../config/types.ts";
+import { syncRoadmaps } from "./sync-roadmaps.ts";
 
 interface PulseFrontmatter {
   date: string;
@@ -252,17 +253,29 @@ async function enrichIndex(project: ProjectConfig, vaultRelPath: string, pulses:
     ? `![[${lastPulse.filename}#TL;DR]]\n\n→ [[${lastPulse.filename}|View full pulse]]`
     : "(no pulses yet)";
 
+  const target = join(project.obsidianPath, "_index.md");
+
+  // Respect a frozen dashboard: enrichIndex normally rewrites _index.md on every
+  // run, so any manual note a user adds would be lost. Setting
+  // `managed_by_janus: false` in the frontmatter opts out and freezes the file.
+  if (existsSync(target)) {
+    const existingFm = parseFrontmatter(splitFrontmatter(await readFile(target, "utf-8")).frontmatter) as Record<string, unknown>;
+    if (String(existingFm.managed_by_janus ?? "") === "false") return false;
+  }
+
   const content = `---
 type: project-index
 project: ${project.name}
 tags: [project-index]
 aliases: ["${aliasFor(project.name)}-index"]
+managed_by_janus: true
 ---
 
 # ${project.name}
 
 > [!summary]+ Current state
 > Embed of the latest pulse's TL;DR + summary metrics for the last 7 days.
+> To stop Janus from overwriting this dashboard, set \`managed_by_janus: false\` in the frontmatter.
 
 ## TL;DR of latest pulse
 
@@ -318,7 +331,6 @@ LIMIT 14
 - Dashboards: [[Janus Pulse|Global view]] · [[Open Risks]] · [[Drift]] · [[Inferring]]
 `;
 
-  const target = join(project.obsidianPath, "_index.md");
   await writeFile(target, content);
   return true;
 }
@@ -342,9 +354,16 @@ async function maybeRegenerateRoadmap(project: ProjectConfig, pulses: ParsedPuls
     && (p.body.includes("Inferred roadmap") || p.body.includes("Roadmap inferido"))
   );
   if (!candidate) {
-    // If the file doesn't exist, leave it (creating placeholders isn't our concern today).
-    if (!existsSync(target)) return false;
-    return false;
+    // No inferring pulse to derive a roadmap from. Fall back to syncRoadmaps,
+    // which mirrors a repo ROADMAP.md, syncs from a "Vs Roadmap" pulse callout,
+    // or — failing both — writes a PENDIENTE placeholder. This guarantees the
+    // `![[_roadmap]]` embed in _index.md is never broken, closing the old
+    // "creating placeholders isn't our concern today" gap. syncRoadmaps re-checks
+    // user-edited (needs_review:false) itself, so this is safe to call here.
+    const sync = await syncRoadmaps({
+      projects: [{ name: project.name, obsidianPath: project.obsidianPath, repoPath: project.repoPath }],
+    });
+    return sync.roadmapsSyncedFromRepo + sync.roadmapsSyncedFromPulse + sync.roadmapsPendingNoSource > 0;
   }
 
   const draft = extractRoadmapDraft(candidate.body);

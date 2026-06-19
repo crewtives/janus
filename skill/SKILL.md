@@ -54,6 +54,7 @@ Mapeo entre intención del usuario y comando concreto:
 | "Backfill últimos N días" | `cd ~/janus && bun run bin/janus.ts pulse --backfill <N>d` |
 | "Solo el proyecto X" | `cd ~/janus && bun run bin/janus.ts pulse --project <X>` |
 | "Desde fecha Y" | `cd ~/janus && bun run bin/janus.ts pulse --since <YYYY-MM-DD>` |
+| "Correr de nuevo / reprocesar un día puntual" | `cd ~/janus && bun run bin/janus.ts pulse --date <YYYY-MM-DD> --force` |
 | "Dry-run / preview" | `cd ~/janus && bun run bin/janus.ts pulse --dry-run` |
 | "Reintentar fallos" | `cd ~/janus && bun run bin/janus.ts retry` |
 | "Verificá que esté todo OK" | `cd ~/janus && bun run bin/janus.ts doctor` |
@@ -92,7 +93,7 @@ Los flags se pueden combinar (ej. `--backfill 7d --project crewtives-janus`).
 ## Notas
 
 - El proceso puede tardar varios minutos según número de proyectos y volumen de actividad.
-- Es idempotente: si un (proyecto, fecha) ya está `done`, se saltea. Para reprocesar, hay que limpiar el row en `.janus/state.db` o usar `retry` con el dead-letter.
+- Es idempotente: si un (proyecto, fecha) ya está `done`, se saltea. Para reprocesar usá `--force` (ignora el checkpoint y regenera aunque esté `done`); combinalo con `--date <YYYY-MM-DD>` para apuntar a un día puntual sin arrastrar el resto del rango (p. ej. tras editar config o el output). `--date` tiene prioridad sobre `--since`/`--backfill`. `retry` queda para reprocesar el dead-letter de fallos. (Antes había que borrar el row a mano en `.janus/state.db`; ya no.)
 - Janus hereda la auth del provider configurado (`claude-code` → Claude Max OAuth, `gemini-cli` → GOOGLE_API_KEY o `~/.gemini/credentials.json`). No gasta API tokens con Claude Max.
 - `provider` y `fallbackProvider` se eligen en `config.local.json`. `doctor` chequea solo los CLIs de los providers configurados.
 - Si no hay actividad en un proyecto, igual genera un pulse con `status: idle` para que el dashboard Obsidian quede completo.

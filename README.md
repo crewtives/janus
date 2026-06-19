@@ -310,6 +310,18 @@ The narrative isn't just for you to read. `bun janus mcp` launches a stdio JSON-
 
 Wire it into your `.mcp.json` so other Claude Code sessions can query Janus directly. See [docs/mcp.md](docs/mcp.md).
 
+## The /daily-pulse skill
+
+Janus ships a Claude Code skill so you can drive it in natural language from any session — "run the daily pulse", "reprocess the 18th", "weekly rollup", "discover new projects" — and the skill maps the request to the right `janus` command.
+
+`janus init` offers to install it. To do it yourself (or on a binary-only install where the wizard skips it):
+
+```bash
+bash scripts/install-skill.sh   # symlinks skill/ → ~/.claude/skills/daily-pulse
+```
+
+Then type `/daily-pulse` in any Claude Code session. The skill calls the `janus` binary on your PATH; if you run from source without the global binary, its commands fall back to `bun run bin/janus.ts`.
+
 ## Documentation
 
 - [docs/FAQ.md](docs/FAQ.md) — common questions before and after installing.

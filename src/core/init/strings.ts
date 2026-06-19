@@ -106,6 +106,12 @@ export interface WizardStrings {
   schedulerHourInvalid: string;
   schedulerMinuteInvalid: string;
 
+  // Skill step
+  skillPrompt: string;
+  skillInstalled: (target: string) => string;
+  skillNoSource: string;
+  skillConflict: (target: string) => string;
+
   // Commit step
   commitConfigWritten: (path: string) => string;
   commitBackupNote: (path: string) => string;
@@ -216,6 +222,14 @@ const EN: WizardStrings = {
   schedulerMinuteLabel: "Minute (0-59):",
   schedulerHourInvalid: "Must be an integer between 0 and 23",
   schedulerMinuteInvalid: "Must be an integer between 0 and 59",
+
+  skillPrompt:
+    "Install the /daily-pulse skill for Claude Code? (symlinks skill/ into ~/.claude/skills so you can run Janus from any session)",
+  skillInstalled: (target) => `Skill installed: ${target} (try /daily-pulse in Claude Code)`,
+  skillNoSource:
+    "Skipping the /daily-pulse skill: no skill/ dir here (binary-only install). Clone the repo and run scripts/install-skill.sh to add it.",
+  skillConflict: (target) =>
+    `${target} already exists and isn't a symlink — left untouched. Remove it and re-run if you want the skill.`,
 
   commitConfigWritten: (path) => `Config written to ${path}`,
   commitBackupNote: (path) => `Backup of the previous config: ${path}`,
@@ -328,6 +342,14 @@ const ES: WizardStrings = {
   schedulerMinuteLabel: "Minuto (0-59):",
   schedulerHourInvalid: "Tiene que ser un entero entre 0 y 23",
   schedulerMinuteInvalid: "Tiene que ser un entero entre 0 y 59",
+
+  skillPrompt:
+    "¿Instalar la skill /daily-pulse para Claude Code? (symlinkea skill/ en ~/.claude/skills para correr Janus desde cualquier sesión)",
+  skillInstalled: (target) => `Skill instalada: ${target} (probá /daily-pulse en Claude Code)`,
+  skillNoSource:
+    "Salteando la skill /daily-pulse: no hay dir skill/ acá (instalación solo-binario). Cloná el repo y corré scripts/install-skill.sh para agregarla.",
+  skillConflict: (target) =>
+    `${target} ya existe y no es un symlink — sin tocar. Borralo y volvé a correr si querés la skill.`,
 
   commitConfigWritten: (path) => `Config escrito en ${path}`,
   commitBackupNote: (path) => `Backup del anterior: ${path}`,

@@ -12,7 +12,7 @@ import {
 } from "@clack/prompts";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import type { DiscordConfig, JanusConfig, ProjectConfig } from "../../config/types.ts";
 import { discoverProjects, renderProjectEntry } from "../discover.ts";
 import { runDoctor, validateDiscordWebhook } from "../doctor.ts";
@@ -29,6 +29,7 @@ import {
   testDiscordWebhook,
 } from "./detect.ts";
 import { DEFAULT_HOUR, DEFAULT_MINUTE } from "./scheduler.ts";
+import { installDailyPulseSkill } from "./skill.ts";
 import { detectLanguage, loadStrings, type Language, type WizardStrings } from "./strings.ts";
 
 /**
@@ -58,6 +59,8 @@ export interface WizardState {
   installLaunchd: boolean;
   launchdHour: number;
   launchdMinute: number;
+  /** Whether to symlink the /daily-pulse skill into ~/.claude/skills at commit. */
+  installSkill: boolean;
   /** UI language for the wizard. Persisted to config.language. */
   language: Language;
   /** Localized strings for the wizard, loaded from `language`. */
@@ -139,6 +142,9 @@ export async function runInit(opts: RunInitOptions): Promise<number> {
   // ─── Step 7: scheduler opt-in ──────────────────────────────────────────────
   if (await stepLaunchd(state) === "abort") return 1;
 
+  // ─── Step 7.5: /daily-pulse skill opt-in ───────────────────────────────────
+  if (await stepSkill(state) === "abort") return 1;
+
   // ─── Step 8: COMMIT — write config + install plist ─────────────────────────
   await commit(state);
 
@@ -186,6 +192,7 @@ function newState(
     installLaunchd: false,
     launchdHour: DEFAULT_HOUR,
     launchdMinute: DEFAULT_MINUTE,
+    installSkill: false,
     language,
     s,
   };
@@ -564,6 +571,22 @@ async function stepLaunchd(state: WizardState): Promise<"continue" | "abort"> {
   return "continue";
 }
 
+// ─── Step 7.5: /daily-pulse skill opt-in ──────────────────────────────────────
+async function stepSkill(state: WizardState): Promise<"continue" | "abort"> {
+  const { s } = state;
+  // Only offer when running from source (the skill/ dir is on disk). A
+  // binary-only install has nothing to symlink.
+  if (!existsSync(join(state.cwd, "skill", "SKILL.md"))) {
+    log.info(s.skillNoSource);
+    state.installSkill = false;
+    return "continue";
+  }
+  const want = await confirm({ message: s.skillPrompt, initialValue: true });
+  if (isCancel(want)) return abortWizard(state);
+  state.installSkill = want === true;
+  return "continue";
+}
+
 // ─── Step 8: COMMIT — write config + install plist ────────────────────────────
 async function commit(state: WizardState): Promise<void> {
   const { s } = state;
@@ -607,6 +630,17 @@ async function commit(state: WizardState): Promise<void> {
       }
     } else if (result.loaded === true) {
       log.success(`Verified: ${kindName} scheduler loaded and enabled`);
+    }
+  }
+
+  if (state.installSkill) {
+    const r = installDailyPulseSkill(state.cwd);
+    if (r.action === "installed" || r.action === "replaced" || r.action === "unchanged") {
+      log.success(s.skillInstalled(r.target));
+    } else if (r.action === "skipped-conflict") {
+      log.warn(s.skillConflict(r.target));
+    } else {
+      log.info(s.skillNoSource);
     }
   }
 }

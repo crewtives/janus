@@ -46,48 +46,50 @@ No la uses para:
 
 ## Cómo invocarla
 
+Los comandos usan el binario `janus` (instalado en el PATH por `install-binary.sh` o Homebrew). **Si instalaste desde fuente sin el binario global**, reemplazá `janus` por `cd <repo-de-janus> && bun run bin/janus.ts` (el repo suele estar en `~/janus`, pero puede vivir en cualquier ruta). Las filas que invocan `bun run scripts/...` siempre requieren el repo clonado.
+
 Mapeo entre intención del usuario y comando concreto:
 
 | Pedido del usuario | Comando |
 |---|---|
-| "Pulse de ayer" / sin args | `cd ~/janus && bun run bin/janus.ts pulse` |
-| "Backfill últimos N días" | `cd ~/janus && bun run bin/janus.ts pulse --backfill <N>d` |
-| "Solo el proyecto X" | `cd ~/janus && bun run bin/janus.ts pulse --project <X>` |
-| "Desde fecha Y" | `cd ~/janus && bun run bin/janus.ts pulse --since <YYYY-MM-DD>` |
-| "Correr de nuevo / reprocesar un día puntual" | `cd ~/janus && bun run bin/janus.ts pulse --date <YYYY-MM-DD> --force` |
-| "Dry-run / preview" | `cd ~/janus && bun run bin/janus.ts pulse --dry-run` |
-| "Reintentar fallos" | `cd ~/janus && bun run bin/janus.ts retry` |
-| "Verificá que esté todo OK" | `cd ~/janus && bun run bin/janus.ts doctor` |
-| "Onboarding / setup wizard" | `cd ~/janus && bun run bin/janus.ts init` |
-| "Weekly rollup" / "consolidado semanal" | `cd ~/janus && bun run bin/janus.ts rollup --week` |
-| "Rollup de N días" | `cd ~/janus && bun run bin/janus.ts rollup --days <N>` |
-| "Monthly digest" | `cd ~/janus && bun run bin/janus.ts monthly` |
-| "Quarterly retro" | `cd ~/janus && bun run bin/janus.ts quarterly` |
-| "Yearly retro" | `cd ~/janus && bun run bin/janus.ts yearly` |
-| "Project spine" (todos o uno) | `cd ~/janus && bun run bin/janus.ts spine [--project <name>]` |
-| "Descubrir proyectos git nuevos" | `cd ~/janus && bun run bin/janus.ts discover [--apply]` |
-| "Búsqueda full-text en el vault" | `cd ~/janus && bun run bin/janus.ts ask "<query>"` |
-| "Arrancar MCP server" / "exponer Janus a otra sesión" | `cd ~/janus && bun run bin/janus.ts mcp` |
-| "Draft de Note para el portfolio" / "armame una nota sobre X" | `cd ~/janus && bun run bin/janus.ts note "<topic>" [--title "..."] [--project <name>]` |
-| "Scaffold completo del vault" (hubs + MOCs + dashboards + fix wiki-links) | `cd ~/janus && bun run scripts/scaffold-vault.ts` |
-| "Eval del voice overhaul side-by-side" | `cd ~/janus && bun run scripts/eval-prompt-voice.ts --last 3` |
-| "Smoke validation de Phase 1" | `cd ~/janus && bun run scripts/smoke-validate-phase1.ts` |
-| "Regenerar daily consolidado" | `cd ~/janus && bun run scripts/regenerate-dailys.ts [YYYY-MM-DD]` |
-| "Enriquecer vault (idx/roadmap/strategy)" | `cd ~/janus && bun run scripts/enrich-vault.ts [project-name]` |
-| "Fix wiki-link 'Pulse anterior' alucinado por LLM" | `cd ~/janus && bun run scripts/fix-pulse-anterior-links.ts [--dry-run]` |
+| "Pulse de ayer" / sin args | `janus pulse` |
+| "Backfill últimos N días" | `janus pulse --backfill <N>d` |
+| "Solo el proyecto X" | `janus pulse --project <X>` |
+| "Desde fecha Y" | `janus pulse --since <YYYY-MM-DD>` |
+| "Correr de nuevo / reprocesar un día puntual" | `janus pulse --date <YYYY-MM-DD> --force` |
+| "Dry-run / preview" | `janus pulse --dry-run` |
+| "Reintentar fallos" | `janus retry` |
+| "Verificá que esté todo OK" | `janus doctor` |
+| "Onboarding / setup wizard" | `janus init` |
+| "Weekly rollup" / "consolidado semanal" | `janus rollup --week` |
+| "Rollup de N días" | `janus rollup --days <N>` |
+| "Monthly digest" | `janus monthly` |
+| "Quarterly retro" | `janus quarterly` |
+| "Yearly retro" | `janus yearly` |
+| "Project spine" (todos o uno) | `janus spine [--project <name>]` |
+| "Descubrir proyectos git nuevos" | `janus discover [--apply]` |
+| "Búsqueda full-text en el vault" | `janus ask "<query>"` |
+| "Arrancar MCP server" / "exponer Janus a otra sesión" | `janus mcp` |
+| "Draft de Note para el portfolio" / "armame una nota sobre X" | `janus note "<topic>" [--title "..."] [--project <name>]` |
+| "Enriquecer vault + scaffold (idx/roadmap/strategy/hubs/MOCs)" | `janus enrich [--project <name>] [--sync-roadmaps]` |
+| "Scaffold completo del vault" (hubs + MOCs + dashboards + fix wiki-links) | `cd <repo-de-janus> && bun run scripts/scaffold-vault.ts` |
+| "Eval del voice overhaul side-by-side" | `cd <repo-de-janus> && bun run scripts/eval-prompt-voice.ts --last 3` |
+| "Smoke validation de Phase 1" | `cd <repo-de-janus> && bun run scripts/smoke-validate-phase1.ts` |
+| "Regenerar daily consolidado" | `cd <repo-de-janus> && bun run scripts/regenerate-dailys.ts [YYYY-MM-DD]` |
+| "Fix wiki-link 'Pulse anterior' alucinado por LLM" | `cd <repo-de-janus> && bun run scripts/fix-pulse-anterior-links.ts [--dry-run]` |
 
 Los flags se pueden combinar (ej. `--backfill 7d --project crewtives-janus`).
 
 ## Flujo recomendado
 
-1. **Onboarding (primera vez en una máquina)**: `bun janus init`. El wizard detecta auth, vault, proyectos, instala launchd y corre `doctor` + `pulse --dry-run` para validar.
-2. **Antes de la primera corrida productiva**: el wizard ya corrió `doctor`. Si saltaste el wizard, corré `doctor` manualmente.
-3. **Primera semana de datos**: `pulse --backfill 7d` para tener una semana de contexto.
+1. **Onboarding (primera vez en una máquina)**: `janus init`. El wizard detecta auth, vault, proyectos, instala launchd, ofrece instalar la skill `/daily-pulse` y corre `doctor` + `pulse --dry-run` para validar.
+2. **Antes de la primera corrida productiva**: el wizard ya corrió `doctor`. Si saltaste el wizard, corré `janus doctor` manualmente.
+3. **Primera semana de datos**: `janus pulse --backfill 7d` para tener una semana de contexto.
 4. **Día a día**: el cron de launchd lo dispara solo; usar esta skill solo si querés:
    - Adelantar el reporte de hoy ("dame el pulse ahora").
-   - Reprocesar un día que falló o que se editó después.
+   - Reprocesar un día que falló o que se editó después (`janus pulse --date <YYYY-MM-DD> --force`).
    - Ver el prompt rendereado antes de mandarlo al LLM.
-5. **Agregar proyectos nuevos**: `bun janus discover` para detectar repos git que no están en config, después `--apply` para agregarlos.
+5. **Agregar proyectos nuevos**: `janus discover` para detectar repos git que no están en config, después `--apply` para agregarlos.
 6. **Cierre de período** (semana/mes/trimestre/año): los rollups respectivos. El monthly auto-archiva los pulses del mes a `_archive/`.
 
 ## Notas
@@ -101,7 +103,7 @@ Los flags se pueden combinar (ej. `--backfill 7d --project crewtives-janus`).
 - El orchestrator enriquece la bóveda (`_index.md`, `_roadmap.md` draft, `STRATEGY.md` template) al final de cada corrida — es idempotente y respeta los archivos editados por el usuario (`needs_review: false`).
 - Al final de cada `pulse` el orchestrator también dispara el **scaffold completo** del vault (hubs + MOCs + dashboards + fix-prev). Idempotente — no toca archivos existentes salvo `--force`.
 - Voz narrativa unificada en `src/prompts/_voice.md` — todos los prompts (daily-pulse v5, daily-rollup v3, weekly v3, monthly v2, quarterly v2, yearly v2, spine v2) la inyectan.
-- **MCP server** (`bun janus mcp`) expone 4 tools tipados consumibles desde Claude Code/Cursor/Codex. Ver `docs/mcp.md` para wire format y el contraste Janus vs companion-agent.
+- **MCP server** (`janus mcp`) expone 4 tools tipados consumibles desde Claude Code/Cursor/Codex. Ver `docs/mcp.md` para wire format y el contraste Janus vs companion-agent.
 - **Bookkeeping persistido en SQLite** (Phase 1C): `project_metadata` (birth dates), `track_lineage` (mentions cross-proyecto), `decision_graph` (referencias ADR). Habilita Phase 2 (reflection) y Phase 3 (Wrapped).
 - **Ver `docs/ARCHITECTURE.md`** del repo para diagramas mermaid del flow end-to-end y decisiones técnicas.
 

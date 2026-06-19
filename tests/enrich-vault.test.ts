@@ -36,6 +36,22 @@ describe("enrichVault — roadmap is never left broken", () => {
     }
   });
 
+  test("does not downgrade a populated inferred roadmap when its source pulse is gone", async () => {
+    const { obsidianPath, config, cleanup } = await setup();
+    try {
+      const rdm = join(obsidianPath, "_roadmap.md");
+      // Auto-inferred (needs_review:true) but with real milestones, and no
+      // inferring pulse on disk anymore. The fallback must NOT clobber it.
+      const inferred = `---\ntype: roadmap\nproject: acme\nsource: pulse-inference\nneeds_review: true\n---\n\n# Roadmap — acme\n\n## Active milestones this week\n\n- [ ] ship onboarding\n- [ ] wire billing\n`;
+      await writeFile(rdm, inferred);
+      const res = await enrichVault(config);
+      expect(await readFile(rdm, "utf-8")).toBe(inferred);
+      expect(res.roadmapsWritten).toBe(0);
+    } finally {
+      await cleanup();
+    }
+  });
+
   test("does not touch a user-edited _roadmap.md (needs_review:false)", async () => {
     const { obsidianPath, config, cleanup } = await setup();
     try {

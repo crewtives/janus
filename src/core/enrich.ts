@@ -354,12 +354,21 @@ async function maybeRegenerateRoadmap(project: ProjectConfig, pulses: ParsedPuls
     && (p.body.includes("Inferred roadmap") || p.body.includes("Roadmap inferido"))
   );
   if (!candidate) {
-    // No inferring pulse to derive a roadmap from. Fall back to syncRoadmaps,
-    // which mirrors a repo ROADMAP.md, syncs from a "Vs Roadmap" pulse callout,
-    // or — failing both — writes a PENDIENTE placeholder. This guarantees the
-    // `![[_roadmap]]` embed in _index.md is never broken, closing the old
-    // "creating placeholders isn't our concern today" gap. syncRoadmaps re-checks
+    // No inferring pulse to derive a roadmap from. Only (re)generate via the
+    // syncRoadmaps fallback when the file is missing or an empty placeholder —
+    // never downgrade a roadmap that already carries inferred milestones (its
+    // source pulse may have aged out). This keeps the `![[_roadmap]]` embed from
+    // breaking without clobbering real content. syncRoadmaps re-checks
     // user-edited (needs_review:false) itself, so this is safe to call here.
+    if (existsSync(target)) {
+      const existing = await readFile(target, "utf-8");
+      const isEmptyOrPlaceholder =
+        existing.includes("(no milestones inferred")
+        || existing.includes(PLACEHOLDER_ROADMAP_MARKER)
+        || existing.includes(LEGACY_ROADMAP_MARKER)
+        || /^source:\s*pending$/m.test(existing);
+      if (!isEmptyOrPlaceholder) return false; // already populated — leave it untouched
+    }
     const sync = await syncRoadmaps({
       projects: [{ name: project.name, obsidianPath: project.obsidianPath, repoPath: project.repoPath }],
     });

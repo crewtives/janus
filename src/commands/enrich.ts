@@ -11,10 +11,10 @@ export default defineCommand({
       type: "string",
       description: "Only enrich this project (by name)",
     },
-    "no-scaffold": {
+    scaffold: {
       type: "boolean",
-      description: "Skip hubs/MOCs/dashboards/fix-related scaffold",
-      default: false,
+      description: "Run hubs/MOCs/dashboards/fix-related scaffold (use --no-scaffold to skip)",
+      default: true,
     },
     "sync-roadmaps": {
       type: "boolean",
@@ -45,7 +45,7 @@ export default defineCommand({
 
     // Mirror the post-pulse scaffold so a bare `janus enrich` reconstructs the
     // whole vault. Runs in-process (no scripts/ dir in the compiled binary).
-    if (!args["no-scaffold"]) {
+    if (args.scaffold) {
       const [{ generateHubs }, { generateMocs }, { generateDashboards }, { fixAllRelated }] = await Promise.all([
         import("../core/scaffold/hubs.ts"),
         import("../core/scaffold/mocs.ts"),

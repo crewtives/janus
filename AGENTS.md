@@ -91,7 +91,7 @@ Then update the import site to point at the new file. Old versions stay in-tree 
 import dailyPulseV8 from "../prompts/daily-pulse.v8.md" with { type: "text" };
 ```
 
-Do NOT reintroduce `Bun.file(promptPath).text()` for prompt loading — it breaks `bun build --compile` because `--compile` doesn't walk source for arbitrary `.md` files. See `docs/HANDOFF-CI-DISTRIBUTION.md` for the bun-compile experiment.
+Do NOT reintroduce `Bun.file(promptPath).text()` for prompt loading — it breaks `bun build --compile` because `--compile` doesn't walk source for arbitrary `.md` files. See `docs/_archive/HANDOFF-CI-DISTRIBUTION.md` for the bun-compile experiment.
 
 The shared voice spec is `src/prompts/_voice.md`. Notes (`note-draft.v2`) carry their own inline voice spec — observational first-person, distinct from the soft third-person used for pulses. Don't merge them.
 

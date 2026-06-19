@@ -72,10 +72,10 @@ Bun's import attribute mechanism is a build-time directive. The bundler resolves
 - New prompts must be imported via `import X from "../prompts/X.vN.md" with { type: "text" }`, never loaded with `Bun.file(...)`
 - AGENTS.md `### Prompts` section documents this; do not relax the rule
 - If a future contributor wants prompt content at runtime (e.g., for `--show-prompt`), expose it via the imported string — never re-introduce filesystem reads
-- The `docs/HANDOFF-CI-DISTRIBUTION.md` decision log records the discovery; preserve it
+- The `docs/_archive/HANDOFF-CI-DISTRIBUTION.md` decision log records the discovery; preserve it
 
 ## Related
 - [Versioned prompts never edit in place](../conventions/versioned-prompts-never-edit-in-place.md)
 - [Bun-native not Node](../tooling-decisions/bun-native-not-node.md)
-- `docs/HANDOFF-CI-DISTRIBUTION.md` — section B5 "Decision" captures the investigation
+- `docs/_archive/HANDOFF-CI-DISTRIBUTION.md` — section B5 "Decision" captures the investigation
 - Commit `cde8c0f` for the full migration diff

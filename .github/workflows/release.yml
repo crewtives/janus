@@ -40,6 +40,16 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun build bin/janus.ts --compile ${{ matrix.target }} --outfile ${{ matrix.asset }}
       - run: ./${{ matrix.asset }} --help
+      # Real smoke: materialize the demo vault from the compiled binary. This
+      # exercises the import-attribute-embedded templates (wrapped sample md/html)
+      # inside the binary's $bunfs — the exact path the historical
+      # `ENOENT /$bunfs/prompts/_voice.md` bug broke. `--help` alone never loads
+      # an embedded asset, so it would not catch a regression here. No auth/vault.
+      - name: Smoke — demo vault from the compiled binary
+        run: |
+          ./${{ matrix.asset }} demo --no-open --out ./demo-smoke
+          test -f ./demo-smoke/Wrapped/Wrapped-2026.html
+          test -f ./demo-smoke/Projects/kepler/pulse/2026-09-19-kepler.md
 
       # macOS code-signing + notarization.
       # ────────────────────────────────────────────────────────────────

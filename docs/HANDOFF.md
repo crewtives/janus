@@ -18,7 +18,7 @@ Self-contained document so another Claude Code session (or another coding agent)
 >   templates are embedded via import attributes, so `bun build --compile` produces
 >   a working binary (pulse + wrapped, including `--format html`); `release.yml`
 >   builds four platform binaries and bumps a public Homebrew tap. The "defer
->   distribution" notes in the session log and `HANDOFF-CI-DISTRIBUTION.md` are obsolete.
+>   distribution" notes in the session log and `docs/_archive/HANDOFF-CI-DISTRIBUTION.md` are obsolete.
 > - **Tests: 382 / 382** (the 348/349 figures below are stale).
 > - Code-signing + `npm publish` stay scaffolded-but-off pending external credentials.
 
@@ -44,7 +44,7 @@ Starting with Phase 3, the system **harvests the narrative**: it generates the a
 
 ### 2026-05-22 — CI + dash rename + bun-compile experiment
 
-Three pieces of plumbing landed; see `docs/HANDOFF-CI-DISTRIBUTION.md` for the full investigation. TL;DR:
+Three pieces of plumbing landed; see `docs/_archive/HANDOFF-CI-DISTRIBUTION.md` for the full investigation. TL;DR:
 
 - **CI is live** (`#2`, merged). `.github/workflows/ci.yml` runs `bun install --frozen-lockfile`, `bunx tsc --noEmit`, `bun test`, and `scripts/smoke-validate-phase1.ts` on every push to `main` and every PR. Matrix `ubuntu-latest` + `macos-latest`, bun pinned to `1.3.14`, `fail-fast: false`. Branch protection deliberately NOT enabled — solo contributor still pushes to main; CI runs post-push as a safety net.
 - **`bun build --compile` experiment**: produces a 61 MB macOS arm64 binary in ~200 ms that runs `--help` and `wrapped --dry-run` end-to-end (dynamic imports survive bundling). Fails on `pulse --dry-run` because `Bun.file("prompts/_voice.md")` resolves to `/$bunfs/prompts/_voice.md` which doesn't exist — `--compile` doesn't walk source for arbitrary `.md`. Distribution deferred until prompts are embedded via Bun import attributes (`import voiceSpec from "../prompts/_voice.md" with { type: "text" }`). README still points at `git clone + bun install`.
@@ -302,7 +302,7 @@ If the new session introduces a catastrophic bug, there's a rollback path to pre
 - Pulse filenames use single-dash separator (`YYYY-MM-DD-<project>.md`) as of `7434155` (2026-05-22).
 - Janus moved from "passive historian" to "reflective coach" (Phase 2) and to "narrator with annual harvest" (Phase 3).
 - The Wrapped CLI works end-to-end against production vault data (dry-run validated post-rename).
-- `bun build --compile` works for everything except prompt loading — see `docs/HANDOFF-CI-DISTRIBUTION.md` for the path forward on distribution.
+- `bun build --compile` works for everything except prompt loading — see `docs/_archive/HANDOFF-CI-DISTRIBUTION.md` for the path forward on distribution.
 - The closest thing to "ready for external users" — still missing LLM output polish (Wrapped and patterns), privacy/redaction layer, and the prompt-embedding step that unlocks a standalone binary.
 - Do not revert the non-obvious decisions listed above without understanding the context.
 - Tests + typecheck before any change.

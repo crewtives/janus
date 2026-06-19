@@ -134,4 +134,4 @@ test("renderPlist escapes special XML characters", () => {
 - [launchd minimal PATH](../integration-issues/launchd-systemd-minimal-path.md)
 - AGENTS.md `### Tests` section, last bullet
 - `tests/init-launchd.test.ts`, `tests/init-systemd.test.ts` — canonical examples
-- `docs/HANDOFF-CI-DISTRIBUTION.md` decision log entry for 2026-05-22 — first CI failure that pinned the pattern
+- `docs/_archive/HANDOFF-CI-DISTRIBUTION.md` decision log entry for 2026-05-22 — first CI failure that pinned the pattern

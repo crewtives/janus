@@ -21,6 +21,13 @@
 #   4. Commit + push to the tap repo's main branch.
 #   5. Verify locally:         brew install crewtives/tap/janus
 
+#
+# NOTE: the `version` and the four `sha256` values below are PLACEHOLDERS by
+# design. This file is a template — the live formula in crewtives/homebrew-tap
+# is the source of truth and is auto-patched on every release by
+# scripts/bump-homebrew-formula.ts. Do not expect the values here to match the
+# current release; check the tap (or `CHANGELOG.md`) for the real numbers.
+
 class Janus < Formula
   desc "Personal historian for makers — synthesizes git + Claude Code sessions into Obsidian"
   homepage "https://github.com/crewtives/janus"

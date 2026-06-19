@@ -39,7 +39,7 @@ The few `node:` imports that exist (`node:path`, `node:os`, `node:crypto`, `node
 
 ### Why this is load-bearing
 
-**`bun build --compile`** requires the codebase to be Bun-aware. The compiled binary (`dist/janus`, 61 MB on macOS arm64) embeds the runtime and ships as a single file. Node-specific shapes don't survive compilation. The decision in `docs/HANDOFF-CI-DISTRIBUTION.md` to defer distribution was specifically about the prompt loading shape, not the Bun runtime — Bun-native is the path forward, not an obstacle.
+**`bun build --compile`** requires the codebase to be Bun-aware. The compiled binary (`dist/janus`, 61 MB on macOS arm64) embeds the runtime and ships as a single file. Node-specific shapes don't survive compilation. The decision in `docs/_archive/HANDOFF-CI-DISTRIBUTION.md` to defer distribution was specifically about the prompt loading shape, not the Bun runtime — Bun-native is the path forward, not an obstacle.
 
 **Bundled-string imports** for prompts (`with { type: "text" }`) are Bun-only and the reason `bun build --compile` can ship without a `prompts/` sidecar. See [bun-compile prompts](../integration-issues/bun-compile-prompts-md.md) for the failure mode that pinned this.
 
@@ -93,4 +93,4 @@ const voiceSpec = await fs.readFile(join(PROMPT_DIR, "_voice.md"), "utf-8");
 - [Vanilla MCP server](vanilla-mcp-server.md)
 - AGENTS.md `## Toolchain` section — pins the rule
 - `package.json` — the 5-dep runtime list
-- `docs/HANDOFF-CI-DISTRIBUTION.md` — distribution path
+- `docs/_archive/HANDOFF-CI-DISTRIBUTION.md` — distribution path

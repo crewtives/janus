@@ -4,6 +4,26 @@ All notable changes to Janus are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.2.9] — 2026-06-19
+
+### Added
+- **`janus pulse --date <YYYY-MM-DD>` and `--force`** to reprocess a single day, ignoring the done-checkpoint. `--date` pins exactly one day (precedence over `--since`/`--backfill`); `--force` regenerates even when already marked done. Replaces the old workaround of hand-deleting rows from `.janus/state.db`.
+- **`janus enrich` subcommand** — rebuilds vault docs (`_index`, `_roadmap`, `STRATEGY`) and the scaffold (hubs, MOCs, dashboards, fix-related) in-process and idempotently, without needing a successful pulse. Flags: `--project`, `--sync-roadmaps`, `--no-scaffold`.
+- **`/daily-pulse` skill onboarding.** `janus init` now offers to symlink the skill into `~/.claude/skills` (Step 7.5, EN/ES), and the skill's commands call the `janus` binary on PATH so they work regardless of where the repo lives — dropping the hardcoded `~/janus` assumption. README and `install.sh` document it.
+
+### Changed
+- **Vault enrichment never leaves a broken roadmap.** When no `inferring` pulse is available, roadmap generation falls back to `syncRoadmaps` (repo `ROADMAP.md` mirror → "Vs Roadmap" pulse callout → `PENDIENTE` placeholder), so the `![[_roadmap]]` embed in `_index.md` always resolves. A roadmap that already carries inferred milestones is never downgraded.
+- **`_index.md` is freezable.** Set `managed_by_janus: false` in its frontmatter to stop Janus from overwriting a hand-edited dashboard; the field is declared in the generated template.
+
+### Fixed
+- **Open-loop detection**: `track_lineage.status` is normalized to the enum at the persistence boundary, so weekly free-text "Status at close" prose no longer leaves tracks invisible to open-loop detection.
+- **Wrapped**: corrected the `wrapped-yearly` `prompt_version` to v3, and embed the HTML/CSS templates so the compiled binary renders Wrapped.
+- **Privacy**: repo paths collapse to `<repo>` in pulse prompts.
+
+### CI / distribution
+- Release builds now run a real binary smoke (`janus demo --no-open`) that loads the import-attribute-embedded templates from the binary's `$bunfs`, catching the historical `ENOENT /$bunfs/...` class of bug in CI instead of on a user's machine.
+- Consolidated distribution docs: archived the superseded CI/distribution handoff and flagged the Homebrew formula template's `version`/`sha256` as placeholders by design.
+
 ## [0.2.8] — 2026-05-29
 
 ### Added

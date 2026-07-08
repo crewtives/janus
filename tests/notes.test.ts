@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { humanDate, renderNotePrompt, slugify, withNoteFrontmatter } from "../src/core/notes.ts";
+import { appendHubBacklink, humanDate, renderNotePrompt, slugify, withNoteFrontmatter } from "../src/core/notes.ts";
 import { splitFrontmatter, getTags } from "../src/core/frontmatter.ts";
 
 const RAW_NOTE = `# Provider-portable runtimes
@@ -19,7 +19,7 @@ More prose.
 `;
 
 describe("withNoteFrontmatter (R12/R13 forward-emit)", () => {
-  test("prepends type/note frontmatter to a frontmatter-less draft, body intact", () => {
+  test("prepends type/note frontmatter to a frontmatter-less draft, body intact, no orphan-wiring", () => {
     const out = withNoteFrontmatter(RAW_NOTE);
     const s = splitFrontmatter(out);
     expect(s.hadFrontmatter).toBe(true);
@@ -27,19 +27,39 @@ describe("withNoteFrontmatter (R12/R13 forward-emit)", () => {
     // the LLM prose (including its embedded --- HR) is preserved verbatim as body
     expect(out).toContain("# Provider-portable runtimes");
     expect(out).toContain("More prose.");
+    // no project → no hub backlink (stays an orphan by design)
+    expect(out).not.toContain("## Related");
   });
 
-  test("adds project/<id> + a project scalar when the caller knows the project", () => {
+  test("adds project/<id>, a project scalar, and a hub backlink when the project is known (R13)", () => {
     const out = withNoteFrontmatter(RAW_NOTE, "crewtives-janus");
     const s = splitFrontmatter(out);
     expect(getTags(s.frontmatter)).toEqual(["type/note", "project/crewtives-janus"]);
     expect(s.frontmatter).toContain("project: crewtives-janus");
+    // graph edge appended below the prose, prose itself untouched
+    expect(out).toContain("## Related");
+    expect(out).toContain("- Hub: [[crewtives-janus]]");
+    expect(out).toContain("More prose.");
   });
 
-  test("idempotent: re-wrapping an already-tagged note is a byte-for-byte no-op", () => {
+  test("idempotent: re-wrapping an already-wired note is a byte-for-byte no-op", () => {
     const once = withNoteFrontmatter(RAW_NOTE, "crewtives-janus");
     const twice = withNoteFrontmatter(once, "crewtives-janus");
     expect(twice).toBe(once);
+    // exactly one backlink, not one per wrap
+    expect(once.match(/- Hub: \[\[crewtives-janus\]\]/g)).toHaveLength(1);
+  });
+});
+
+describe("appendHubBacklink (R13 graph edge)", () => {
+  test("appends a ## Related hub backlink to a body without one", () => {
+    const out = appendHubBacklink("Some prose.\n", "crewtives-whet-app");
+    expect(out).toBe("Some prose.\n\n## Related\n\n- Hub: [[crewtives-whet-app]]\n");
+  });
+
+  test("idempotent when the backlink is already present", () => {
+    const once = appendHubBacklink("Some prose.\n", "crewtives-whet-app");
+    expect(appendHubBacklink(once, "crewtives-whet-app")).toBe(once);
   });
 });
 
@@ -154,5 +174,8 @@ describe("renderNotePrompt", () => {
     expect(out).toContain("First-person observational");
     expect(out).toContain("Do not wrap in a code fence");
     expect(out).toContain("No marketing");
+    // v3: project-anonymity is a hard output requirement
+    expect(out).toContain("Anonymization & privacy");
+    expect(out).toContain("No proper names of the work");
   });
 });

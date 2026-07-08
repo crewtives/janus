@@ -54,12 +54,12 @@ export default defineCommand({
 
     if (args["dry-run"]) {
       console.log(`[note] dry-run · slug=${r.slug} · ${r.contextDocs} context docs · prompt=${r.promptChars} chars`);
-      console.log(`[note] target path: ${r.path}`);
+      console.log(`[note] project: ${r.project ?? "(none — orphan)"} · target path: ${r.path}`);
       return;
     }
 
     console.log(`[note] ✓ ${r.path}`);
-    console.log(`[note] ${r.contextDocs} context docs · prompt=${r.promptChars} chars · output=${r.outputChars} chars`);
+    console.log(`[note] project: ${r.project ?? "(none — orphan)"} · ${r.contextDocs} context docs · prompt=${r.promptChars} chars · output=${r.outputChars} chars`);
     console.log("");
     console.log("Next step: edit the draft and move it into the Crewtives CMS.");
   },

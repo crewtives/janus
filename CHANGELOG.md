@@ -4,6 +4,14 @@ All notable changes to Janus are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-07-08
+
+### Added
+- **Portfolio notes attach to the graph.** `janus note` now writes a `## Related` hub backlink and a `project/<id>` tag when the project is known — passed via `--project` or inferred from the dominant project in the gathered context — so a note is no longer a graph orphan hidden by `showOrphans:false`. Realizes the `R13 / OQ2·KD5` note attribution + hub backlink deferred in Fase 2.
+
+### Changed
+- **`note-draft` prompt v3 — project-anonymous drafts.** New `note-draft.v3.md` adds a mandatory "Anonymization & privacy" section, so a generated note's published body never names the project, product, domain, person, or internal identifiers. `note-draft.v2` kept in-tree per the prompt-versioning convention.
+
 ## [0.3.0] — 2026-07-08
 
 ### Added

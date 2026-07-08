@@ -116,7 +116,7 @@ export function writePrevNext(
 
 const PULSE_FILENAME = /^\d{4}-\d{2}-\d{2}-.+\.md$/;
 
-interface PulseSeqEntry {
+export interface PulseSeqEntry {
   filename: string; // without .md
   filePath: string;
   inLive: boolean;
@@ -126,8 +126,10 @@ interface PulseSeqEntry {
  * The full chronological pulse sequence for a project: live `pulse/*.md` plus
  * archived `_archive/YYYY-MM/*.md`. Both dirs are project-scoped, so a
  * date-prefix filter is enough. Sorted ascending by the date-prefixed filename.
+ *
+ * Shared with U4 (`defuse.ts`) so both write identical prev/next values (OQ5).
  */
-async function buildProjectPulseSequence(project: ProjectConfig): Promise<PulseSeqEntry[]> {
+export async function buildProjectPulseSequence(project: ProjectConfig): Promise<PulseSeqEntry[]> {
   const out: PulseSeqEntry[] = [];
 
   const pulseDir = join(project.obsidianPath, "pulse");

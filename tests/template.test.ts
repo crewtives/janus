@@ -24,8 +24,8 @@ beforeAll(async () => {
 });
 
 describe("template", () => {
-  test("PROMPT_VERSION is v8", () => {
-    expect(PROMPT_VERSION).toBe("v8");
+  test("PROMPT_VERSION is v9", () => {
+    expect(PROMPT_VERSION).toBe("v9");
   });
 
   test("loadVoiceSpec returns a non-empty string with the 10 hard rules", async () => {
@@ -101,7 +101,7 @@ describe("template", () => {
     expect(out).toContain("feat: new");
     expect(out).toContain("11111111");
     expect(out).toContain("claude-sonnet-4-6");
-    expect(out).toContain("v8");
+    expect(out).toContain("v9");
     // session mining: userIntent + decision/blocker snippets rendered in the prompt
     expect(out).toContain("Implement JSONL session parser");
     expect(out).toContain("Bun.file");
@@ -187,14 +187,16 @@ describe("template", () => {
       previousPulseFilename: "2026-05-18--xref-proj",
     });
     const out = await renderDailyPulsePrompt(ctx);
+    // Prose cross-refs (Modifies/reverts, Recurring) survive the de-fuse (KD4).
     expect(out).toContain("2026-05-18--xref-proj");
     expect(out).toContain("Dirty working tree on feature/x");
     expect(out).toContain("2026-05-17--xref-proj");
     expect(out).toContain("Adopt SQLite");
-    expect(out).toContain("Previous pulse: [[2026-05-18--xref-proj]]");
+    // …but the structural date-chain line is gone (R10).
+    expect(out).not.toContain("Previous pulse:");
   });
 
-  test("without previous pulse, the prompt instructs to omit the previous-day wiki-link", async () => {
+  test("v9 emits a de-fused pulse: one hub up-link, no footer/date-chain, canonical tags (R8/R10/R11/R12)", async () => {
     const ctx = buildPromptContext({
       project: "fresh-proj",
       date: "2026-05-20",
@@ -208,8 +210,16 @@ describe("template", () => {
       hasPreviousPulse: false,
     });
     const out = await renderDailyPulsePrompt(ctx);
-    expect(out).toContain("no previous pulse in the vault");
+    // R11: the one structural up-link, to the hub.
+    expect(out).toContain("- Hub: [[fresh-proj]]");
+    // R10: no previous/next date-chain line emitted.
     expect(out).not.toMatch(/Previous pulse: \[\[20\d\d-\d\d-\d\d/);
+    expect(out).not.toContain("no previous pulse in the vault");
+    // R8: no MOC footer on pulses.
+    expect(out).not.toContain("[[Projects MOC]]");
+    expect(out).not.toContain("[[Decisions MOC]] · [[Risks MOC]]");
+    // R12/KD1: additive canonical tags, bare `pulse` preserved for dashboards.
+    expect(out).toContain("tags: [pulse, pulse/fresh-proj, type/pulse, project/fresh-proj]");
   });
 
   test("STRATEGY nag escalates with strategyDaysAsDraft", async () => {

@@ -236,6 +236,7 @@ project: ${opts.project}
 source: repo:${opts.repoFile}
 synced_at: ${new Date().toISOString()}
 needs_review: true
+tags: [type/roadmap, project/${opts.project}]
 ---
 
 # Roadmap — ${opts.project}
@@ -275,6 +276,7 @@ project: ${project}
 generated_at: ${new Date().toISOString()}
 source: pulse-sync
 needs_review: true
+tags: [type/roadmap, project/${project}]
 ---
 
 # Roadmap — ${project}
@@ -311,6 +313,7 @@ project: ${opts.project}
 source: pending
 generated_at: ${new Date().toISOString()}
 needs_review: true
+tags: [type/roadmap, project/${opts.project}]
 ---
 
 # Roadmap — ${opts.project}

@@ -21,6 +21,7 @@ import { Eta } from "eta";
 import type { JanusConfig, ProjectConfig } from "../config/types.ts";
 import { resolveRunner } from "../runners/registry.ts";
 import { stripCodeFenceWrap } from "./daily.ts";
+import { addTags, joinFrontmatter, prependFrontmatter, setKey, splitFrontmatter } from "./frontmatter.ts";
 import { loadVoiceSpec } from "./template.ts";
 import { SearchIndex } from "./search-index.ts";
 import noteDraftTemplate from "../prompts/note-draft.v2.md" with { type: "text" };
@@ -229,7 +230,7 @@ export async function generateNoteDraft(
   if (!content) throw new Error("LLM returned empty content");
 
   await mkdir(dirname(targetPath), { recursive: true });
-  await writeFile(targetPath, content);
+  await writeFile(targetPath, withNoteFrontmatter(content, opts.project));
 
   return {
     path: targetPath,
@@ -239,6 +240,30 @@ export async function generateNoteDraft(
     promptChars: prompt.length,
     outputChars: content.length,
   };
+}
+
+/**
+ * Prepend the canonical note frontmatter (R12/R13) to an LLM-generated note.
+ *
+ * The note-draft prompt deliberately emits NO frontmatter (Topic/Date are bold
+ * markdown after the H1), so a Notes draft is all body — the classifier can't
+ * derive its project from path/filename either. This wrapper attaches the
+ * `type/note` tag now, plus `project/<id>` when the caller knows it (KD5); the
+ * hub backlink stays deferred so we never mutate the LLM prose. Idempotent, and
+ * defensive if a note ever arrives with its own frontmatter.
+ */
+export function withNoteFrontmatter(content: string, project?: string): string {
+  const tags = project ? ["type/note", `project/${project}`] : ["type/note"];
+  const split = splitFrontmatter(content);
+  if (split.hadFrontmatter) {
+    let fm = addTags(split.frontmatter, tags);
+    if (project) fm = setKey(fm, "project", project);
+    return joinFrontmatter(fm, split.body);
+  }
+  const lines = ["type: note"];
+  if (project) lines.push(`project: ${project}`);
+  lines.push(`tags: [${tags.join(", ")}]`);
+  return prependFrontmatter(lines, content);
 }
 
 /**

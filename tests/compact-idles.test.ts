@@ -56,6 +56,11 @@ describe("compactIdleStreaks", () => {
     expect(compacted).toContain("streak_start: 2026-05-13");
     expect(compacted).toContain("streak_end: 2026-05-15");
     expect(compacted).toContain("streak_days: 3");
+    // Fase 2: canonical R12 tags (additive, keeps bare `pulse`), one hub up-link,
+    // and NO MOC footer on the compacted pulse (R8/R11/R12).
+    expect(compacted).toContain("tags: [pulse, pulse/test-proj, type/pulse, project/test-proj, idle-streak]");
+    expect(compacted).toContain("- Hub: [[test-proj]]");
+    expect(compacted).not.toContain("[[Projects MOC]]");
 
     await cleanup();
   });

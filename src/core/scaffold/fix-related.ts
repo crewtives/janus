@@ -1,26 +1,33 @@
 /**
- * Post-process determinista que repara la línea `Pulse anterior: ...` en
- * la sección `## Related` de cada pulse. Calcula el inmediato anterior
- * leyendo los filenames del directorio `pulse/` — sin LLM, sin costo.
+ * Deterministic post-process for each pulse's structural links (Fase 2 / U3).
  *
- * Por qué existe: el LLM con status=idle a veces alucina la frase
- * (e.g. "Pulse anterior: (sin pulse anterior en la ventana disponible)")
- * en lugar de copiar el wiki-link literal del template. También a veces
- * el LLM linkea al filename equivocado. Este módulo normaliza todo desde
- * el filesystem (que es la fuente de verdad).
+ * Two jobs, no LLM, no cost:
  *
- * Idempotente: si la línea ya es la canónica para ese pulse, no la toca.
+ *  1. Canonicalize the single up-link `- Hub: [[<project>]]` in `## Related`
+ *     (R11 — every pulse keeps exactly one structural up-link, to its hub).
+ *  2. Stamp `prev:`/`next:` chronology into the frontmatter (R10 — order is a
+ *     property, NOT a graph edge, so it's a bare filename, never a `[[wikilink]]`).
  *
- * También sincroniza la línea "Hub: [[<project>]]" si quedó mal escrita.
+ * Why this file no longer writes `- Pulse anterior: [[…]]`: that date-chain line
+ * was the exact edge R10 removes and the exact thing that re-fused the graph on
+ * every `janus run` (orchestrator calls `fixAllRelated`). The chronology it
+ * carried now lives in `prev:`/`next:` instead.
  *
- * Importable in-process desde el orchestrator. El thin wrapper en
- * `scripts/fix-pulse-anterior-links.ts` mantiene la invocación CLI standalone.
+ * prev/next authority (OQ5): U4's deterministic pass owns the full live+archive
+ * chronology. This writer maintains the LIVE tail (`pulse/*.md`) every run, but
+ * computes indices against the full per-project sequence (live + `_archive/**`)
+ * so the first live pulse's `prev:` points at the last archived pulse — i.e. it
+ * writes the SAME values U4 would, keeping the two idempotent with each other.
+ *
+ * Importable in-process from the orchestrator. The thin wrapper in
+ * `scripts/fix-pulse-anterior-links.ts` keeps the standalone CLI.
  */
 import { existsSync } from "node:fs";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { loadConfig } from "../../config/loader.ts";
 import type { JanusConfig, ProjectConfig } from "../../config/types.ts";
+import { joinFrontmatter, removeKey, setKey, splitFrontmatter } from "../frontmatter.ts";
 
 export interface FixResult {
   pulseFile: string;
@@ -47,15 +54,12 @@ export interface FixAllResult {
 }
 
 /**
- * Reescribe la línea "Pulse anterior: ..." en la sección ## Related con
- * el wiki-link canónico para `expectedPrev`. Si `expectedPrev` es null
- * (primer pulse del proyecto), escribe la línea fallback del template.
- *
- * También repara la línea "Hub: [[<project>]]" si está rota.
+ * Canonicalize the `- Hub: [[<project>]]` line inside `## Related`. Repairs an
+ * existing hub line that drifted (alias/typo); does not insert one when absent
+ * (v9 always emits it, and U4 guarantees exactly one). Idempotent.
  */
 export function fixRelatedSection(
   content: string,
-  expectedPrevFilename: string | null,
   projectName: string,
 ): { content: string; changed: boolean; reason: string } {
   const lines = content.split("\n");
@@ -74,95 +78,119 @@ export function fixRelatedSection(
     }
   }
 
-  const canonicalPrev = expectedPrevFilename
-    ? `- Pulse anterior: [[${expectedPrevFilename}]]`
-    : `- (sin pulse anterior en la bóveda — primer pulse del proyecto o gap)`;
-
   const canonicalHub = `- Hub: [[${projectName}]]`;
 
-  let prevLineIdx = -1;
   let hubLineIdx = -1;
   for (let i = relatedIdx + 1; i < endIdx; i++) {
-    const line = lines[i]!;
-    if (/^[-*]\s*Hub:\s*/i.test(line)) {
-      hubLineIdx = i;
-    } else if (
-      /^[-*]\s*Pulse anterior:/i.test(line) ||
-      /^[-*]\s*\(sin pulse anterior/i.test(line)
-    ) {
-      prevLineIdx = i;
-    }
+    if (/^[-*]\s*Hub:\s*/i.test(lines[i]!)) hubLineIdx = i;
   }
-
-  let changed = false;
-  const reasons: string[] = [];
 
   if (hubLineIdx !== -1 && lines[hubLineIdx] !== canonicalHub) {
     lines[hubLineIdx] = canonicalHub;
-    changed = true;
-    reasons.push("hub");
+    return { content: lines.join("\n"), changed: true, reason: "hub" };
   }
 
-  if (prevLineIdx === -1) {
-    const insertAt = hubLineIdx !== -1 ? hubLineIdx + 1 : relatedIdx + 1;
-    lines.splice(insertAt, 0, canonicalPrev);
-    changed = true;
-    reasons.push("agregado prev");
-  } else if (lines[prevLineIdx] !== canonicalPrev) {
-    lines[prevLineIdx] = canonicalPrev;
-    changed = true;
-    reasons.push(expectedPrevFilename ? "fix wiki-link" : "fix sin-prev");
+  return { content, changed: false, reason: "ya canónico" };
+}
+
+/**
+ * Stamp `prev:`/`next:` scalars into the frontmatter. Bare filenames (no `.md`,
+ * no `[[…]]`) so Obsidian never renders a graph edge (R10). Boundary pulses drop
+ * the absent side. Idempotent; no-op on notes without frontmatter.
+ */
+export function writePrevNext(
+  content: string,
+  prev: string | null,
+  next: string | null,
+): { content: string; changed: boolean } {
+  const split = splitFrontmatter(content);
+  if (!split.hadFrontmatter) return { content, changed: false };
+
+  let fm = split.frontmatter;
+  fm = prev ? setKey(fm, "prev", prev) : removeKey(fm, "prev");
+  fm = next ? setKey(fm, "next", next) : removeKey(fm, "next");
+
+  const updated = joinFrontmatter(fm, split.body);
+  return { content: updated, changed: updated !== content };
+}
+
+const PULSE_FILENAME = /^\d{4}-\d{2}-\d{2}-.+\.md$/;
+
+interface PulseSeqEntry {
+  filename: string; // without .md
+  filePath: string;
+  inLive: boolean;
+}
+
+/**
+ * The full chronological pulse sequence for a project: live `pulse/*.md` plus
+ * archived `_archive/YYYY-MM/*.md`. Both dirs are project-scoped, so a
+ * date-prefix filter is enough. Sorted ascending by the date-prefixed filename.
+ */
+async function buildProjectPulseSequence(project: ProjectConfig): Promise<PulseSeqEntry[]> {
+  const out: PulseSeqEntry[] = [];
+
+  const pulseDir = join(project.obsidianPath, "pulse");
+  if (existsSync(pulseDir)) {
+    for (const f of await readdir(pulseDir)) {
+      if (PULSE_FILENAME.test(f)) {
+        out.push({ filename: f.replace(/\.md$/, ""), filePath: join(pulseDir, f), inLive: true });
+      }
+    }
   }
 
-  return {
-    content: lines.join("\n"),
-    changed,
-    reason: reasons.join(", ") || "ya canónico",
-  };
+  const archiveDir = join(project.obsidianPath, "_archive");
+  if (existsSync(archiveDir)) {
+    const glob = new Bun.Glob("*/*.md");
+    for await (const rel of glob.scan({ cwd: archiveDir, absolute: false })) {
+      const base = rel.slice(rel.lastIndexOf("/") + 1);
+      if (PULSE_FILENAME.test(base)) {
+        out.push({ filename: base.replace(/\.md$/, ""), filePath: join(archiveDir, rel), inLive: false });
+      }
+    }
+  }
+
+  out.sort((a, b) => a.filename.localeCompare(b.filename));
+  return out;
 }
 
 export async function fixProject(
   project: ProjectConfig,
   dryRun: boolean,
 ): Promise<FixProjectResult> {
-  const pulseDir = join(project.obsidianPath, "pulse");
-  if (!existsSync(pulseDir)) {
-    return { scanned: 0, changed: 0, results: [] };
-  }
-
-  const entries = await readdir(pulseDir);
-  const pulseFiles = entries
-    .filter((f) => f.endsWith(".md"))
-    .filter((f) => /^\d{4}-\d{2}-\d{2}-/.test(f))
-    .sort(); // ascendente cronológico
-
+  const seq = await buildProjectPulseSequence(project);
   const results: FixResult[] = [];
   let changedCount = 0;
+  let scanned = 0;
 
-  for (let i = 0; i < pulseFiles.length; i++) {
-    const filename = pulseFiles[i]!;
-    const filePath = join(pulseDir, filename);
-    const content = await readFile(filePath, "utf-8");
+  for (let i = 0; i < seq.length; i++) {
+    const entry = seq[i]!;
+    // U3 maintains only the live tail; U4 owns archive rewrites.
+    if (!entry.inLive) continue;
+    scanned += 1;
 
-    const prevFilename = i > 0 ? pulseFiles[i - 1]!.replace(/\.md$/, "") : null;
+    const content = await readFile(entry.filePath, "utf-8");
+    const prev = i > 0 ? seq[i - 1]!.filename : null;
+    const next = i < seq.length - 1 ? seq[i + 1]!.filename : null;
 
-    const fix = fixRelatedSection(content, prevFilename, project.name);
+    const hub = fixRelatedSection(content, project.name);
+    const pn = writePrevNext(hub.content, prev, next);
+    const changed = hub.changed || pn.changed;
 
-    if (fix.changed) {
+    if (changed) {
       changedCount += 1;
-      if (!dryRun) {
-        await writeFile(filePath, fix.content);
-      }
+      if (!dryRun) await writeFile(entry.filePath, pn.content);
     }
 
+    const reasons = [hub.changed ? hub.reason : null, pn.changed ? "prev/next" : null].filter(Boolean);
     results.push({
-      pulseFile: filename,
-      changed: fix.changed,
-      reason: fix.reason,
+      pulseFile: `${entry.filename}.md`,
+      changed,
+      reason: reasons.join(", ") || "ya canónico",
     });
   }
 
-  return { scanned: pulseFiles.length, changed: changedCount, results };
+  return { scanned, changed: changedCount, results };
 }
 
 export async function fixAllRelated(opts: FixAllOptions = {}): Promise<FixAllResult> {

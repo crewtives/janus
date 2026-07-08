@@ -1,5 +1,47 @@
 import { describe, expect, test } from "bun:test";
-import { humanDate, renderNotePrompt, slugify } from "../src/core/notes.ts";
+import { humanDate, renderNotePrompt, slugify, withNoteFrontmatter } from "../src/core/notes.ts";
+import { splitFrontmatter, getTags } from "../src/core/frontmatter.ts";
+
+const RAW_NOTE = `# Provider-portable runtimes
+
+**Topic:** Architecture
+**Date:** May 21, 2026
+
+The orchestration layer is the product.
+
+## A detail
+
+Some prose with an embedded HR:
+
+---
+
+More prose.
+`;
+
+describe("withNoteFrontmatter (R12/R13 forward-emit)", () => {
+  test("prepends type/note frontmatter to a frontmatter-less draft, body intact", () => {
+    const out = withNoteFrontmatter(RAW_NOTE);
+    const s = splitFrontmatter(out);
+    expect(s.hadFrontmatter).toBe(true);
+    expect(getTags(s.frontmatter)).toEqual(["type/note"]);
+    // the LLM prose (including its embedded --- HR) is preserved verbatim as body
+    expect(out).toContain("# Provider-portable runtimes");
+    expect(out).toContain("More prose.");
+  });
+
+  test("adds project/<id> + a project scalar when the caller knows the project", () => {
+    const out = withNoteFrontmatter(RAW_NOTE, "crewtives-janus");
+    const s = splitFrontmatter(out);
+    expect(getTags(s.frontmatter)).toEqual(["type/note", "project/crewtives-janus"]);
+    expect(s.frontmatter).toContain("project: crewtives-janus");
+  });
+
+  test("idempotent: re-wrapping an already-tagged note is a byte-for-byte no-op", () => {
+    const once = withNoteFrontmatter(RAW_NOTE, "crewtives-janus");
+    const twice = withNoteFrontmatter(once, "crewtives-janus");
+    expect(twice).toBe(once);
+  });
+});
 
 describe("slugify", () => {
   test("converts spaces and uppercase", () => {

@@ -6,6 +6,7 @@ import {
   getTags,
   addTags,
   setKey,
+  removeKey,
   readFreezeFlags,
   isFrozen,
 } from "../src/core/frontmatter.ts";
@@ -128,6 +129,14 @@ describe("frontmatter — setKey (prev/next)", () => {
     const out = setKey(frontmatter, "status", "active");
     expect(out).toContain("status: active");
     expect(out).not.toContain("status: idle");
+  });
+
+  test("removeKey drops a scalar and is idempotent when absent", () => {
+    const { frontmatter } = splitFrontmatter(PULSE);
+    const withNext = setKey(frontmatter, "next", "2026-05-26-myorg-core");
+    const dropped = removeKey(withNext, "next");
+    expect(dropped).toBe(frontmatter); // back to the original, byte-for-byte
+    expect(removeKey(frontmatter, "next")).toBe(frontmatter); // absent key → no-op
   });
 });
 

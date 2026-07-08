@@ -9,9 +9,9 @@ import { stripCodeFenceWrap } from "./daily.ts";
 import { materializeTracks, parseTracks, recordTrackLineage } from "./tracks.ts";
 import { loadVoiceSpec } from "./template.ts";
 import { Checkpoint } from "./checkpoint.ts";
-import monthlyDigestTemplate from "../prompts/monthly-digest.v4.md" with { type: "text" };
+import monthlyDigestTemplate from "../prompts/monthly-digest.v5.md" with { type: "text" };
 
-export const MONTHLY_PROMPT_VERSION = "v4" as const;
+export const MONTHLY_PROMPT_VERSION = "v5" as const;
 
 const eta = new Eta({ autoEscape: false, rmWhitespace: false });
 

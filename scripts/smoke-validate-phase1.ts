@@ -53,7 +53,7 @@ await check("voice spec loads without error", async () => {
 // 2. Render all 7 prompts with a mock context
 const voice = await loadVoiceSpec();
 
-await check("daily-pulse.v8 renders with a mock context", async () => {
+await check("daily-pulse (current PROMPT_VERSION) renders with a mock context", async () => {
   const ctx = buildPromptContext({
     project: "demo",
     date: "2026-05-21",
@@ -67,17 +67,17 @@ await check("daily-pulse.v8 renders with a mock context", async () => {
   });
   const out = await renderDailyPulsePrompt(ctx);
   if (!out.includes("Voice of Janus")) throw new Error("voice spec not injected");
-  if (!out.includes("v8")) throw new Error("PROMPT_VERSION missing");
-  return `${out.length} chars`;
+  if (!out.includes(PROMPT_VERSION)) throw new Error("PROMPT_VERSION missing");
+  return `${out.length} chars, prompt_version=${PROMPT_VERSION}`;
 });
 
 const otherPrompts: Array<{ file: string; ctx: Record<string, unknown> }> = [
-  { file: "daily-rollup.v5.md", ctx: { voice, date: "2026-05-21", pulses: [{ project: "demo", content: "x" }], promptVersion: "v5" } },
-  { file: "weekly-rollup.v5.md", ctx: { voice, days: 7, startDate: "2026-05-15", endDate: "2026-05-21", projects: ["demo"], dailies: [{ date: "2026-05-21", content: "x" }], promptVersion: "v5" } },
-  { file: "monthly-digest.v4.md", ctx: { voice, month: "2026-05", startDate: "2026-05-01", endDate: "2026-05-31", days: 31, projects: ["demo"], weeklies: [], uncoveredDailies: [], promptVersion: "v4" } },
+  { file: "daily-rollup.v6.md", ctx: { voice, date: "2026-05-21", pulses: [{ project: "demo", content: "x" }], promptVersion: "v6" } },
+  { file: "weekly-rollup.v6.md", ctx: { voice, days: 7, startDate: "2026-05-15", endDate: "2026-05-21", projects: ["demo"], dailies: [{ date: "2026-05-21", content: "x" }], promptVersion: "v6" } },
+  { file: "monthly-digest.v5.md", ctx: { voice, month: "2026-05", startDate: "2026-05-01", endDate: "2026-05-31", days: 31, projects: ["demo"], weeklies: [], uncoveredDailies: [], promptVersion: "v5" } },
   { file: "quarterly-retro.v3.md", ctx: { voice, quarter: "2026-Q2", startDate: "2026-04-01", endDate: "2026-06-30", days: 91, projects: ["demo"], monthlies: [], uncoveredWeeklies: [], promptVersion: "v3" } },
   { file: "yearly-retro.v3.md", ctx: { voice, year: "2026", startDate: "2026-01-01", endDate: "2026-12-31", projects: ["demo"], quarterlies: [{ quarter: "2026-Q1", content: "x" }], promptVersion: "v3" } },
-  { file: "project-spine.v3.md", ctx: { voice, project: "demo", generatedAt: "2026-05-21", previousSpine: null, strategyMd: "", strategyStatus: "missing", roadmap: "", recentWeeklies: [], recentPulses: [], activeTracks: [], projectAdrs: [], promptVersion: "v3" } },
+  { file: "project-spine.v4.md", ctx: { voice, project: "demo", generatedAt: "2026-05-21", previousSpine: null, strategyMd: "", strategyStatus: "missing", roadmap: "", recentWeeklies: [], recentPulses: [], activeTracks: [], projectAdrs: [], promptVersion: "v4" } },
 ];
 
 for (const p of otherPrompts) {

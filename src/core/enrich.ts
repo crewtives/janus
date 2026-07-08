@@ -266,7 +266,7 @@ async function enrichIndex(project: ProjectConfig, vaultRelPath: string, pulses:
   const content = `---
 type: project-index
 project: ${project.name}
-tags: [project-index]
+tags: [project-index, type/index, project/${project.name}]
 aliases: ["${aliasFor(project.name)}-index"]
 managed_by_janus: true
 ---
@@ -392,6 +392,7 @@ project: ${project.name}
 generated_at: ${new Date().toISOString()}
 source: pulse-inference
 needs_review: true
+tags: [type/roadmap, project/${project.name}]
 ---
 
 # Roadmap — ${project.name}
@@ -430,6 +431,7 @@ type: strategy
 project: ${project.name}
 status: draft
 needs_review: true
+tags: [type/strategy, project/${project.name}]
 ---
 
 # STRATEGY — ${project.name}
@@ -468,6 +470,10 @@ needs_review: true
 ## Notes
 
 - Generated on ${nowISODate()} as a template. Delete this block once the sections are filled and leave \`needs_review: false\`.
+
+## Related
+
+- Hub: [[${project.name}]]
 `;
   await writeFile(target, content);
   return true;

@@ -91,7 +91,34 @@ describe("enrichVault — _index respects managed_by_janus", () => {
       const body = await readFile(idx, "utf-8");
       expect(body).toContain("Current state");
       expect(body).toContain("managed_by_janus: true");
+      // Fase 2 R12: additive canonical tags (keeps bare `project-index` for dashboards).
+      expect(body).toContain("tags: [project-index, type/index, project/acme]");
       expect(res.indexesWritten).toBe(1);
+    } finally {
+      await cleanup();
+    }
+  });
+});
+
+describe("enrichVault — Fase 2 forward-emit (R12/R13)", () => {
+  test("a fresh STRATEGY.md gains canonical tags and a hub backlink", async () => {
+    const { obsidianPath, config, cleanup } = await setup();
+    try {
+      await enrichVault(config);
+      const strategy = await readFile(join(obsidianPath, "STRATEGY.md"), "utf-8");
+      expect(strategy).toContain("tags: [type/strategy, project/acme]");
+      expect(strategy).toContain("- Hub: [[acme]]"); // R13: orphan note attaches to its cluster
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test("a pending _roadmap.md carries canonical tags", async () => {
+    const { obsidianPath, config, cleanup } = await setup();
+    try {
+      await enrichVault(config);
+      const roadmap = await readFile(join(obsidianPath, "_roadmap.md"), "utf-8");
+      expect(roadmap).toContain("tags: [type/roadmap, project/acme]");
     } finally {
       await cleanup();
     }

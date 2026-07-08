@@ -11,9 +11,9 @@ import { detectStrategyStatus } from "./strategy-status.ts";
 import { loadActiveTracks } from "./active-tracks.ts";
 import { listAdrs } from "./adr.ts";
 import { loadVoiceSpec } from "./template.ts";
-import projectSpineTemplate from "../prompts/project-spine.v3.md" with { type: "text" };
+import projectSpineTemplate from "../prompts/project-spine.v4.md" with { type: "text" };
 
-export const SPINE_PROMPT_VERSION = "v3" as const;
+export const SPINE_PROMPT_VERSION = "v4" as const;
 const SPINE_RECENT_WEEKLIES = 3;
 const SPINE_RECENT_PULSES_DAYS = 14;
 

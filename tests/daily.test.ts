@@ -21,18 +21,23 @@ async function createPulse(project: string, date: string, content: string): Prom
 }
 
 describe("daily consolidated", () => {
-  test("renderFallback produces frontmatter + embeds + dataview + nav", () => {
+  test("renderFallback is de-fused: plain roster + dataview + dashboard, no embeds/date-chain (R9)", () => {
     const out = renderFallback("2026-05-20", [
       { project: "alpha", content: "" },
       { project: "beta", content: "" },
     ]);
     expect(out).toContain("date: 2026-05-20");
-    expect(out).toContain("tags: [daily, daily/2026-05]");
+    expect(out).toContain("tags: [daily, daily/2026-05, type/daily]"); // R12 canonical type tag
     expect(out).toContain("pulses_count: 2");
-    expect(out).toContain("![[2026-05-20-alpha#TL;DR]]");
-    expect(out).toContain("![[2026-05-20-beta#TL;DR]]");
+    expect(out).toContain("## alpha"); // plain-text roster
+    expect(out).toContain("## beta");
+    // R9: no per-pulse transclusions or see-full-pulse wiki-links
+    expect(out).not.toContain("![[2026-05-20-alpha#TL;DR]]");
+    expect(out).not.toContain("|View full pulse]]");
     expect(out).toContain("```dataview");
-    expect(out).toContain("[[2026-05-19|Previous day]]");
+    // R9: no Previous/Next date-chain; only the dashboard entry point remains
+    expect(out).not.toContain("Previous day");
+    expect(out).not.toContain("Next day");
     expect(out).toContain("[[Janus Pulse|Global dashboard]]");
     expect(out).toContain("fallback_render: true");
   });
@@ -61,7 +66,8 @@ describe("daily consolidated", () => {
     expect(res?.projectCount).toBe(1);
     expect(res?.llmGenerated).toBe(false);
     const content = await readFile(res!.path, "utf-8");
-    expect(content).toContain("![[2026-05-20-alpha#TL;DR]]");
+    expect(content).toContain("## alpha");
+    expect(content).not.toContain("![[2026-05-20-alpha#TL;DR]]");
   });
 
   test("dry-run does not write but returns the path", async () => {

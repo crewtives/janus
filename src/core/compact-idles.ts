@@ -240,7 +240,7 @@ insertions: 0
 deletions: 0
 risks: 0
 prompt_version: compact
-tags: [pulse, pulse/${opts.project}, ${tagsExtra}]
+tags: [pulse, pulse/${opts.project}, type/pulse, project/${opts.project}, ${tagsExtra}]
 aliases: ["${opts.project} ${isIdle ? "Idle" : "Quiet"} ${opts.startDate} → ${opts.endDate}"]
 ---
 
@@ -252,7 +252,6 @@ aliases: ["${opts.project} ${isIdle ? "Idle" : "Quiet"} ${opts.startDate} → ${
 
 ## Related
 - Hub: [[${opts.project}]]
-- MOCs: [[Projects MOC]]
 
 > [!info]- Detail
 > ${detail} To recover the per-day detail, delete this file and re-run:

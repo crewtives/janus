@@ -4,6 +4,7 @@ import { basename, dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { Eta } from "eta";
 import type { JanusConfig } from "../config/types.ts";
+import type { LLMRunner } from "../runners/types.ts";
 import { resolveRunner } from "../runners/registry.ts";
 import { materializeTracks, parseTracks, recordTrackLineage } from "./tracks.ts";
 import { stripCodeFenceWrap } from "./daily.ts";
@@ -37,6 +38,14 @@ export async function writeWeeklyRollup(opts: {
   endDate: string;
   config: JanusConfig;
   projectNames: string[];
+  /**
+   * Suppress the `writeAllProjectSpines` side effect — the dominant LLM cost.
+   * Used by bulk backfill (`--skip-spines`) and hermetic tests. The weekly
+   * narrative itself still uses the LLM.
+   */
+  skipSpines?: boolean;
+  /** Inject a fake runner for hermetic tests; else the config's runner is used. */
+  runnerOverride?: LLMRunner;
 }): Promise<WeeklyWriteResult | null> {
   const dailies = await collectDailies(opts.vaultPath, opts.startDate, opts.endDate);
   if (dailies.length === 0) {
@@ -97,7 +106,8 @@ export async function writeWeeklyRollup(opts: {
   });
   if (typeof prompt !== "string") throw new Error("weekly template render fail");
 
-  const result = await resolveRunner(opts.config).run({
+  const runner = opts.runnerOverride ?? resolveRunner(opts.config);
+  const result = await runner.run({
     prompt,
     cwd: opts.vaultPath,
     model: opts.config.model!,
@@ -195,15 +205,18 @@ export async function writeWeeklyRollup(opts: {
   }
 
   // Auto-regenerate Project Spines (continuous per-project narrative).
-  try {
-    const { writeAllProjectSpines } = await import("./spine.ts");
-    const spines = await writeAllProjectSpines({ config: opts.config });
-    const generated = spines.filter((s): s is NonNullable<typeof s> => s !== null);
-    if (generated.length > 0) {
-      console.log(`[weekly] project spines regenerated: ${generated.length}`);
+  // The dominant LLM cost — `skipSpines` suppresses it during bulk backfill.
+  if (!opts.skipSpines) {
+    try {
+      const { writeAllProjectSpines } = await import("./spine.ts");
+      const spines = await writeAllProjectSpines({ config: opts.config });
+      const generated = spines.filter((s): s is NonNullable<typeof s> => s !== null);
+      if (generated.length > 0) {
+        console.log(`[weekly] project spines regenerated: ${generated.length}`);
+      }
+    } catch (err) {
+      console.warn(`[weekly] spine regeneration failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`);
     }
-  } catch (err) {
-    console.warn(`[weekly] spine regeneration failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`);
   }
 
   return { path, daysWithData: dailies.length, tracksMaterialized };
@@ -231,4 +244,79 @@ function daysBetweenInclusive(start: string, end: string): number {
   const s = new Date(`${start}T00:00:00`);
   const e = new Date(`${end}T00:00:00`);
   return Math.round((e.getTime() - s.getTime()) / 86_400_000) + 1;
+}
+
+// --- Weekly self-heal helpers (Fase 0 / U1) -----------------------------------
+//
+// Convention (KTD1): a completed week ends on a Sunday and its rollup lives at
+// Timeline/Weekly/<sunday>-week.md. Weekday math uses local-midnight parsing
+// (`${date}T00:00:00`) so it matches the operator's local timezone — a bare
+// `new Date("YYYY-MM-DD")` parses as UTC and returns the wrong weekday in a
+// negative-offset timezone.
+
+function formatLocalDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Path of the weekly rollup file for a given (Sunday) end date. */
+export function weeklyRollupPath(vaultPath: string, endDate: string): string {
+  return join(vaultPath, "Timeline", "Weekly", `${endDate}-week.md`);
+}
+
+/** True if the weekly rollup file for `endDate` already exists on disk. */
+export async function weeklyRollupExists(vaultPath: string, endDate: string): Promise<boolean> {
+  return Bun.file(weeklyRollupPath(vaultPath, endDate)).exists();
+}
+
+/** The most recent Sunday on or before `date` — the end of the most recent completed week. */
+export function mostRecentSunday(date: string): string {
+  const d = new Date(`${date}T00:00:00`);
+  d.setDate(d.getDate() - d.getDay()); // getDay() === 0 on Sunday → subtracts 0
+  return formatLocalDate(d);
+}
+
+/**
+ * Sunday-ending week-end dates to (re)generate, ascending.
+ *
+ * Returns every Sunday strictly after `afterEnd` up to and including the most
+ * recent completed week (Sunday on/before `upTo`). This recovers a multi-week
+ * gap — e.g. a vacation — not just the most recent week.
+ *
+ * `afterEnd` is the end-date of the last existing weekly (Sunday or legacy). It
+ * is the floor so the daily self-heal trigger never auto-backfills the whole
+ * history: the historical gap lives *below* the most recent existing weekly and
+ * is filled only by the explicit `--backfill` command (KTD5). When `afterEnd`
+ * is null (no weekly exists at all) only the single most recent completed week
+ * is returned, for the same reason.
+ */
+export function completedWeekEndsSince(afterEnd: string | null, upTo: string): string[] {
+  const target = mostRecentSunday(upTo);
+  if (afterEnd !== null && target <= afterEnd) return [];
+  if (afterEnd === null) return [target];
+  const out: string[] = [];
+  let cur = target;
+  while (cur > afterEnd) {
+    out.push(cur);
+    const d = new Date(`${cur}T00:00:00`);
+    d.setDate(d.getDate() - 7);
+    cur = formatLocalDate(d);
+  }
+  return out.reverse();
+}
+
+/** End-date of the most recent existing weekly rollup file, or null if none. */
+export async function latestWeeklyEnd(vaultPath: string): Promise<string | null> {
+  const dir = join(vaultPath, "Timeline", "Weekly");
+  if (!existsSync(dir)) return null;
+  const entries = await readdir(dir);
+  let max: string | null = null;
+  for (const name of entries) {
+    const m = name.match(/^(\d{4}-\d{2}-\d{2})-week\.md$/);
+    if (!m || !m[1]) continue;
+    if (max === null || m[1] > max) max = m[1];
+  }
+  return max;
 }

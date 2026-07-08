@@ -270,3 +270,64 @@ export function previousMonth(currentDate: string): string {
 export function isFirstOfMonth(currentDate: string): boolean {
   return /-01$/.test(currentDate);
 }
+
+// --- Monthly self-heal helpers (Fase 0 / U2) ----------------------------------
+//
+// The calendar trigger only fires when a run processes a `-01` date; a slept-
+// through first-of-month run loses that month with no catch-up on launchd. The
+// self-heal backstop regenerates any fully-elapsed month whose digest is
+// missing, back to the last existing monthly (KTD2). `writeMonthlyDigest` is
+// already idempotent, so no writer change is needed.
+
+/** The next month after `month` (YYYY-MM → YYYY-MM). */
+function nextMonth(month: string): string {
+  const [y, m] = month.split("-").map((s) => parseInt(s!, 10));
+  const d = new Date(y!, m!, 1); // m! is 1-indexed → new Date's 0-indexed month = next month
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** True if the monthly digest file for `month` (YYYY-MM) already exists. */
+export async function monthlyDigestExists(vaultPath: string, month: string): Promise<boolean> {
+  return Bun.file(join(vaultPath, "Timeline", "Monthly", `${month}-monthly.md`)).exists();
+}
+
+/** The most recent existing monthly digest (YYYY-MM), or null if none. */
+export async function latestMonthlyDigest(vaultPath: string): Promise<string | null> {
+  const dir = join(vaultPath, "Timeline", "Monthly");
+  if (!existsSync(dir)) return null;
+  const entries = await readdir(dir);
+  let max: string | null = null;
+  for (const name of entries) {
+    const m = name.match(/^(\d{4}-\d{2})-monthly\.md$/);
+    if (!m || !m[1]) continue;
+    if (max === null || m[1] > max) max = m[1];
+  }
+  return max;
+}
+
+/**
+ * Fully-elapsed months (YYYY-MM) that lack a digest, back to the last existing
+ * monthly — ascending. A month is fully elapsed once `upToDate` is in a later
+ * month; the most recent one is `previousMonth(upToDate)`.
+ *
+ * The last existing monthly is the floor so the self-heal never auto-backfills
+ * the whole history: an older gap lives *below* the floor and is regenerated
+ * only by the explicit `janus monthly --month <YYYY-MM>` command. When no
+ * monthly exists at all, only the single most recent elapsed month is returned.
+ */
+export async function pendingMonthlyDigests(opts: {
+  vaultPath: string;
+  upToDate: string;
+}): Promise<string[]> {
+  const target = previousMonth(opts.upToDate); // most recent fully-elapsed month
+  const floor = await latestMonthlyDigest(opts.vaultPath);
+  if (floor === null) {
+    return (await monthlyDigestExists(opts.vaultPath, target)) ? [] : [target];
+  }
+  if (target <= floor) return [];
+  const out: string[] = [];
+  for (let cur = nextMonth(floor); cur <= target; cur = nextMonth(cur)) {
+    if (!(await monthlyDigestExists(opts.vaultPath, cur))) out.push(cur);
+  }
+  return out;
+}

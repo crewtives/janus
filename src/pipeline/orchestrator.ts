@@ -19,6 +19,7 @@ import { loadDayLastYearAnchor } from "../core/reflection/anchors.ts";
 import { validatePulse } from "../core/validate-pulse.ts";
 import { notifyDiscord, type ProjectResult } from "../core/discord.ts";
 import { writeDailyConsolidated } from "../core/daily.ts";
+import { relativeVaultPath } from "../core/vault-path.ts";
 import { AbortError, makeQueue, withRetry } from "./queue.ts";
 
 export interface RunPulseOptions {
@@ -212,13 +213,19 @@ export async function runPulse(opts: RunPulseOptions): Promise<void> {
       console.warn(`[janus] scaffold failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`);
     }
 
-    // Monthly auto-trigger: if any processed date is the first day of its
-    // month, generate the previous month's monthly digest + archive pulses.
+    // Monthly auto-trigger: the calendar path fires when a processed date is a
+    // first-of-month (generate the prior month). The self-heal backstop (U2)
+    // unions in any fully-elapsed month whose digest is missing — so a run that
+    // slept through the first-of-month still catches up on the next run.
     try {
-      const { isFirstOfMonth, previousMonth, writeMonthlyDigest } = await import("../core/monthly.ts");
-      const triggers = [...new Set(dates.filter(isFirstOfMonth).map(previousMonth))];
+      const { isFirstOfMonth, previousMonth, writeMonthlyDigest, pendingMonthlyDigests } =
+        await import("../core/monthly.ts");
+      const calendar = dates.filter(isFirstOfMonth).map(previousMonth);
+      const upTo = dates.reduce((a, b) => (a > b ? a : b));
+      const selfHeal = await pendingMonthlyDigests({ vaultPath: config.obsidianVault, upToDate: upTo });
+      const triggers = [...new Set([...calendar, ...selfHeal])];
       for (const month of triggers) {
-        console.log(`[janus] triggering monthly digest for ${month} (month rollover detected)`);
+        console.log(`[janus] triggering monthly digest for ${month} (auto-trigger)`);
         const r = await writeMonthlyDigest({ vaultPath: config.obsidianVault, month, config });
         if (r) {
           console.log(`[janus] monthly ✓ ${r.path} · ${r.pulsesArchived} pulses archived`);
@@ -226,6 +233,23 @@ export async function runPulse(opts: RunPulseOptions): Promise<void> {
       }
     } catch (err) {
       console.warn(`[janus] monthly auto-trigger failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    // Weekly self-heal (U1): generate any completed (Sunday-ending) week whose
+    // rollup file is missing, back to the last existing weekly. Because launchd
+    // does not catch up missed runs, this self-heals a multi-week gap on the
+    // next run rather than firing only on a boundary day. Best-effort,
+    // non-fatal — mirrors the monthly block above. Derives purely from the
+    // run's `dates`; lives in the post-run block, not the per-project queue.
+    try {
+      const { weeklySelfHeal } = await import("./rollup-runner.ts");
+      const upTo = dates.reduce((a, b) => (a > b ? a : b));
+      const generated = await weeklySelfHeal({ config, upToDate: upTo });
+      for (const sunday of generated) {
+        console.log(`[janus] weekly ✓ ${sunday}-week.md (self-heal)`);
+      }
+    } catch (err) {
+      console.warn(`[janus] weekly auto-trigger failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 }
@@ -531,13 +555,6 @@ async function shouldSuppressRoadmapDraft(project: ProjectConfig, currentDate: s
     if (status !== "inferring") return false;
   }
   return true;
-}
-
-function relativeVaultPath(vaultRoot: string, projectObsidianPath: string): string {
-  const rel = projectObsidianPath.startsWith(vaultRoot)
-    ? projectObsidianPath.slice(vaultRoot.length).replace(/^\/+/, "")
-    : projectObsidianPath;
-  return rel;
 }
 
 function filterProjects(projects: ProjectConfig[], name?: string): ProjectConfig[] {

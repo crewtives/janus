@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { archiveStaleTracks, unarchiveTrack } from "../src/core/track-ttl.ts";
 
 async function setupVault(opts: {
-  tracks: Array<{ slug: string; mentions: string[]; mtimeDaysAgo?: number }>;
+  tracks: Array<{ slug: string; mentions: string[]; mtimeDaysAgo?: number; mtimeDate?: string }>;
   weeklies: string[]; // YYYY-MM-DD list (creará -week.md vacíos)
 }): Promise<{ vaultPath: string; cleanup: () => Promise<void> }> {
   const dir = await mkdtemp(join(tmpdir(), "janus-ttl-"));
@@ -37,7 +37,13 @@ ${mentionsBlock || "(sin menciones)"}
 `;
     const filePath = join(tracksDir, `${t.slug}.md`);
     await writeFile(filePath, content);
-    if (typeof t.mtimeDaysAgo === "number") {
+    // Prefer an absolute mtime so the fixture never drifts against the fixed
+    // weekly dates as wall-clock advances (archiveStaleTracks measures mtime
+    // against the vault's latest weekly, not `Date.now()`).
+    if (typeof t.mtimeDate === "string") {
+      const past = new Date(`${t.mtimeDate}T00:00:00`);
+      await utimes(filePath, past, past);
+    } else if (typeof t.mtimeDaysAgo === "number") {
       const past = new Date(Date.now() - t.mtimeDaysAgo * 86_400_000);
       await utimes(filePath, past, past);
     }
@@ -116,7 +122,9 @@ describe("archiveStaleTracks", () => {
   test("track without mentions in weeklies uses mtime", async () => {
     const { vaultPath, cleanup } = await setupVault({
       weeklies: ["2026-05-20"],
-      tracks: [{ slug: "no-mentions", mentions: [], mtimeDaysAgo: 60 }],
+      // Fixed mtime ~11 weeks before the latest weekly (2026-05-20) → well past
+      // the 4-week ttl. Absolute (not `Date.now()`-relative) so it stays green.
+      tracks: [{ slug: "no-mentions", mentions: [], mtimeDate: "2026-03-01" }],
     });
     const r = await archiveStaleTracks({ vaultPath, ttlWeeks: 4 });
     expect(r.tracksArchived).toBe(1);

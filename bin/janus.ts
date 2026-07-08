@@ -21,6 +21,7 @@ const main = defineCommand({
     adr: () => import("../src/commands/adr.ts").then((m) => m.default),
     "archive-tracks": () => import("../src/commands/archive-tracks.ts").then((m) => m.default),
     spine: () => import("../src/commands/spine.ts").then((m) => m.default),
+    graph: () => import("../src/commands/graph.ts").then((m) => m.default),
     discover: () => import("../src/commands/discover.ts").then((m) => m.default),
     init: () => import("../src/commands/init.ts").then((m) => m.default),
     retry: () => import("../src/commands/retry.ts").then((m) => m.default),

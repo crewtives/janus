@@ -43,7 +43,6 @@ for (const project of config.projects) {
       date,
       status: "ok",
       obsidianPath: filePath,
-      repoPath: join(project.repoPath, "docs", "pulse", name),
       contentPreview: content.slice(0, 400),
     };
     const arr = datesMap.get(date) ?? [];

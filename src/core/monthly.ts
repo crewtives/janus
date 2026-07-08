@@ -203,12 +203,9 @@ async function archiveProjectPulses(project: ProjectConfig, month: string): Prom
   const { startDate, endDate } = monthBounds(month);
   const pulseDir = join(project.obsidianPath, "pulse");
   const archiveDir = join(project.obsidianPath, "_archive", month);
-  const repoPulseDir = join(project.repoPath, "docs", "pulse");
-  const repoArchiveDir = join(project.repoPath, "docs", "_archive", month);
   if (!existsSync(pulseDir)) return 0;
 
   await mkdir(archiveDir, { recursive: true });
-  await mkdir(repoArchiveDir, { recursive: true });
 
   const entries = await readdir(pulseDir);
   let moved = 0;
@@ -225,12 +222,6 @@ async function archiveProjectPulses(project: ProjectConfig, month: string): Prom
       moved += 1;
     } catch {
       // tolerant: if rename fails, leave the file in place
-    }
-    // Same in the repo
-    const fromRepo = join(repoPulseDir, name);
-    const toRepo = join(repoArchiveDir, name);
-    if (existsSync(fromRepo) && !existsSync(toRepo)) {
-      try { await rename(fromRepo, toRepo); } catch { /* tolerant */ }
     }
   }
   return moved;

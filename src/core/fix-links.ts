@@ -34,12 +34,10 @@ const ANY_PULSE_LINK_RE = /\[\[(\d{4}-\d{2}-\d{2}-[a-z][a-z0-9-]+)(\|[^\]]+)?\]\
  * apuntan a un pulse inexistente: se redirigen al streak que cubre esa fecha,
  * o se degradan a texto plano para no perder la mención.
  *
- * Tolera duplicados del mismo archivo (writePulse del orchestrator escribe en
- * vault + docs/pulse del repo).
+ * Los pulses viven solo en la bóveda (el dual-write al repo se eliminó).
  */
 export async function fixBrokenPreviousLinks(opts: {
   obsidianPath: string;
-  repoPath?: string;
   project: string;
   dryRun?: boolean;
 }): Promise<LinkFixResult> {
@@ -53,14 +51,13 @@ export async function fixBrokenPreviousLinks(opts: {
   };
 
   const vaultPulses = await readProjectPulses(opts.obsidianPath, opts.project);
-  const repoPulses = opts.repoPath ? await readProjectPulses(join(opts.repoPath, "docs"), opts.project) : [];
 
   // Set de filenames que SÍ existen en el vault — lo usamos para validar links.
   const existingFilenames = new Set(vaultPulses.map((p) => p.filename));
 
   result.pulsesScanned = vaultPulses.length;
 
-  const allPulses = [...vaultPulses, ...repoPulses];
+  const allPulses = vaultPulses;
 
   // Mapa: cualquier fecha → filename del pulse que la cubre (incluyendo streaks).
   const dateToFilename = new Map<string, string>();

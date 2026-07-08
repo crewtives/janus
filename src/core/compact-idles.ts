@@ -38,7 +38,6 @@ const MIN_STREAK_LEN = 2;
  */
 export async function compactIdleStreaks(opts: {
   obsidianPath: string;
-  repoPath: string;
   project: string;
   dryRun?: boolean;
   minStreakLen?: number;
@@ -84,20 +83,11 @@ export async function compactIdleStreaks(opts: {
       kind,
     });
     await writeFile(first.filePath, content);
-    const repoFirst = join(opts.repoPath, "docs", "pulse", `${first.filename}.md`);
-    if (existsSync(repoFirst)) {
-      await writeFile(repoFirst, content);
-    }
     result.streaksWritten += 1;
 
     for (const p of run.slice(1)) {
       if (existsSync(p.filePath)) {
         await unlink(p.filePath);
-        result.filesDeleted += 1;
-      }
-      const repoP = join(opts.repoPath, "docs", "pulse", `${p.filename}.md`);
-      if (existsSync(repoP)) {
-        await unlink(repoP);
         result.filesDeleted += 1;
       }
     }

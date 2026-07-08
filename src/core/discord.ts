@@ -5,7 +5,6 @@ export interface ProjectResult {
   date: string;
   status: "ok" | "failed" | "dry-run";
   obsidianPath?: string;
-  repoPath?: string;
   contentPreview?: string;
   error?: string;
 }

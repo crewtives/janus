@@ -57,34 +57,22 @@ export function obsidianPulsePath(obsidianPath: string, project: string, date: s
 }
 
 /**
- * Path inside the project's repo:
- *   <repoPath>/docs/pulse/<date>-<project>.md
+ * Pulses live ONLY in the Janus vault, never duplicated into the project repo.
+ * The old dual-write into `<repoPath>/docs/pulse/` was dropped: the vault is the
+ * single source of truth, and the repo copies weren't in the graph and only
+ * cluttered each project's history.
  */
-export function repoPulsePath(repoPath: string, project: string, date: string): string {
-  return join(repoPath, "docs", "pulse", pulseFilename(project, date));
-}
-
 export async function writePulse(opts: {
   obsidianPath: string;
-  repoPath: string;
   project: string;
   date: string;
   content: string;
   dryRun?: boolean;
-}): Promise<{ obsidianTarget: string; repoTarget: string }> {
+}): Promise<{ obsidianTarget: string }> {
   const obsidianTarget = obsidianPulsePath(opts.obsidianPath, opts.project, opts.date);
-  const repoTarget = repoPulsePath(opts.repoPath, opts.project, opts.date);
-
-  if (opts.dryRun) {
-    return { obsidianTarget, repoTarget };
-  }
-
-  await Promise.all([
-    writeFile(obsidianTarget, opts.content),
-    writeFile(repoTarget, opts.content),
-  ]);
-
-  return { obsidianTarget, repoTarget };
+  if (opts.dryRun) return { obsidianTarget };
+  await writeFile(obsidianTarget, opts.content);
+  return { obsidianTarget };
 }
 
 async function writeFile(path: string, content: string): Promise<void> {

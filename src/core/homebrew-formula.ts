@@ -10,6 +10,11 @@
  * plus ALL four per-platform `sha256` lines atomically from a release's
  * SHA256SUMS, and throws on any gap — a half-patched formula is the failure mode
  * we are fixing, so partial success must be a hard error.
+ *
+ * It also re-pins each asset URL to the interpolated `v#{version}`. A block that
+ * hardcodes a literal version keeps fetching that old binary while `version` +
+ * `sha256` advance — the exact bug that stranded Apple-Silicon installs on 0.2.8
+ * (the `on_arm` macOS URL was pinned to `v0.2.8` from 0.2.8 through 0.3.1).
  */
 
 /** Release asset filenames; each appears verbatim in exactly one `url` line. */
@@ -64,6 +69,14 @@ export function bumpFormula(
     if (!sha) throw new Error(`SHA256SUMS missing entry for ${asset}`);
     const urlIdx = lines.findIndex((l) => l.includes(`/${asset}"`));
     if (urlIdx === -1) throw new Error(`formula has no url line for ${asset}`);
+    // Re-pin the URL's version segment to `v#{version}`. A literal (e.g.
+    // `.../v0.2.8/janus-macos-arm64`) would keep fetching that binary while the
+    // sha256 below advances — a guaranteed mismatch. Idempotent when already
+    // interpolated (`v#{version}` has no slash, so it round-trips).
+    lines[urlIdx] = lines[urlIdx]!.replace(
+      new RegExp(`(/releases/download/)v[^/]+(/${asset}")`),
+      "$1v#{version}$2",
+    );
     const shaIdx = lines.findIndex((l, i) => i > urlIdx && /^\s*sha256\s+"/.test(l));
     // The sha256 sits directly under its url; a far-away match means the block
     // for this asset is malformed and we'd patch the wrong platform.

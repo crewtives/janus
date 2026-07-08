@@ -106,4 +106,22 @@ describe("bumpFormula", () => {
       /no `version/,
     );
   });
+
+  test("re-pins a hardcoded literal-version URL to v#{version} (the arm64 0.2.8 bug)", () => {
+    const hardcoded = FORMULA.replace(
+      "download/v#{version}/janus-macos-arm64",
+      "download/v0.2.8/janus-macos-arm64",
+    );
+    expect(hardcoded).toContain("download/v0.2.8/janus-macos-arm64"); // fixture really is stale
+
+    const { formula } = bumpFormula(hardcoded, "0.3.1", parseSha256Sums(sumsFile()));
+
+    // the literal version is gone; every asset URL interpolates v#{version}
+    // and still carries the freshly-mapped sha256 on the line below it.
+    expect(formula).not.toContain("v0.2.8");
+    for (const asset of HOMEBREW_ASSETS) {
+      expect(formula).toContain(`download/v#{version}/${asset}`);
+      expect(shaUnderUrl(formula, asset)).toBe(SHA[asset]);
+    }
+  });
 });

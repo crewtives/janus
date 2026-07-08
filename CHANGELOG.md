@@ -4,6 +4,9 @@ All notable changes to Janus are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+### Fixed
+- **Homebrew installs on Apple Silicon no longer strand on a stale version.** `bumpFormula` now re-pins every asset URL to `v#{version}`, so a formula block that hardcodes a literal version can't keep serving an old binary past a release bump. The macOS `on_arm` URL had been pinned to `v0.2.8` since 0.2.8 — every `brew install/upgrade` on arm64 through 0.3.1 silently fetched that binary and failed the new release's checksum. (The live tap formula was fixed out-of-band.)
+
 ## [0.3.1] — 2026-07-08
 
 ### Added

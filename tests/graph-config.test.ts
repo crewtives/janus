@@ -141,7 +141,11 @@ describe("graph-config — merge and owned keys", () => {
     });
     await writeGraphConfig({ config });
     const g = await readGraph(config);
-    expect(g.search).toBe(`-path:"Timeline" -path:"Dashboards"`);
+    expect(g.search).toBe(
+      `-path:"Timeline" -path:"Dashboards" -path:"MOCs/Projects MOC" ` +
+        `-path:"MOCs/Decisions MOC" -path:"MOCs/Risks MOC" ` +
+        `-path:"MOCs/Tracks MOC" -path:"MOCs/Weekly MOC"`,
+    );
     expect(g.showOrphans).toBe(false);
     expect(g.showTags).toBe(false);
     expect(g.showAttachments).toBe(false);

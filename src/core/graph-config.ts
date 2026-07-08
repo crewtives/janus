@@ -9,9 +9,9 @@ import { relativeVaultPath } from "./vault-path.ts";
  * `<vault>/.obsidian/graph.json` so the global graph reads as per-project
  * color clusters — one hue per project, subprojects nested under a shared
  * product folder collapsed into one, a bright hub/spine overlay, and
- * Timeline/Dashboards/orphans filtered out. It overwrites only the keys it
- * owns and preserves the user's hand-tuned display values (`scale`,
- * `nodeSizeMultiplier`, `collapse-*`, …).
+ * Timeline/Dashboards, the MOC supernodes, and orphans filtered out. It
+ * overwrites only the keys it owns and preserves the user's hand-tuned display
+ * values (`scale`, `nodeSizeMultiplier`, `collapse-*`, …).
  *
  * This changes zero note content (R7): it only emits graph configuration.
  */
@@ -34,6 +34,26 @@ const FORCE_PRESET = {
   linkStrength: 0.5,
   linkDistance: 250,
 } as const;
+
+// Janus generates these root MOC index notes (src/core/scaffold/mocs.ts). The
+// pulse footer links three of them from nearly every note, so they become
+// supernodes that wire every project to every other. Hiding them from the
+// global graph drops those ~1.5k edges from the render so the clusters read
+// cleanly — a cosmetic complement to R6. The per-track hubs under MOCs/Tracks/
+// stay visible (they are legitimate cross-project links). The edges still exist
+// in the notes; removing them at the source is Fase 2's job.
+const HIDDEN_MOC_INDEXES = [
+  "MOCs/Projects MOC",
+  "MOCs/Decisions MOC",
+  "MOCs/Risks MOC",
+  "MOCs/Tracks MOC",
+  "MOCs/Weekly MOC",
+];
+const SEARCH_FILTER = [
+  `-path:"Timeline"`,
+  `-path:"Dashboards"`,
+  ...HIDDEN_MOC_INDEXES.map((p) => `-path:"${p}"`),
+].join(" ");
 
 interface ColorGroup {
   query: string;
@@ -127,7 +147,7 @@ export async function writeGraphConfig(opts: {
   const merged = {
     ...base,
     colorGroups,
-    search: `-path:"Timeline" -path:"Dashboards"`,
+    search: SEARCH_FILTER,
     showTags: false,
     showAttachments: false,
     showOrphans: false,

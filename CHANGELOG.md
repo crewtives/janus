@@ -4,6 +4,18 @@ All notable changes to Janus are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-07-08
+
+### Added
+- **`janus defuse`** — one-time deterministic, no-LLM graph de-fuse pass over all existing vault notes. Strips MOC footers and pulse date-chains, delinks pulse-to-pulse prose links, and stamps `prev`/`next` chronology plus canonical `type/<type>` and `project/<id>` tags. DRY-RUN by default; `--apply` writes, `--project` filters. Backup-first and idempotent (a second `--apply` is a byte-for-byte no-op).
+
+### Changed
+- **Graph de-fuse (Fase 2).** Generated notes no longer emit the shared `[[Decisions MOC]] · [[Risks MOC]] · [[Projects MOC]]` footer (pulses) or pulse-to-pulse date-chain wiki-links; chronological order moves to `prev`/`next` frontmatter properties instead of graph edges. Aggregators (daily/weekly/monthly) drop per-pulse transclusions, nav date-chains, and MOC footers. Every note gains **additive** canonical `type/<type>` + `project/<id>` tags — the bare `pulse` tag and scalar `type:` field are preserved, so every dashboard/MOC dataview is unchanged. New prompt versions: `daily-pulse.v9`, `daily-rollup.v6`, `weekly-rollup.v6`, `monthly-digest.v5`, `project-spine.v4`.
+- **Pulses live only in the Obsidian vault.** The dual-write into each project repo's `docs/pulse/` was removed — the vault is the single source of truth.
+
+### Fixed
+- **`fix-related` no longer re-fuses the graph on every run.** It stamps `prev`/`next` frontmatter instead of re-inserting the `- Pulse anterior:` date-chain line, and canonicalizes the single hub up-link — so a scheduled run no longer undoes the de-fuse.
+
 ## [0.2.9] — 2026-06-19
 
 ### Added

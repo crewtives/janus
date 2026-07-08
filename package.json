@@ -1,6 +1,6 @@
 {
   "name": "janus",
-  "version": "0.2.9",
+  "version": "0.3.0",
   "description": "The personal historian for makers — nightly agent that reads git + Claude Code sessions and writes a continuous narrative into Obsidian.",
   "type": "module",
   "license": "MIT",

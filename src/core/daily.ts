@@ -7,9 +7,9 @@ import type { JanusConfig } from "../config/types.ts";
 import { resolveRunner } from "../runners/registry.ts";
 import type { ProjectResult } from "./discord.ts";
 import { loadVoiceSpec } from "./template.ts";
-import dailyRollupTemplate from "../prompts/daily-rollup.v5.md" with { type: "text" };
+import dailyRollupTemplate from "../prompts/daily-rollup.v6.md" with { type: "text" };
 
-export const ROLLUP_PROMPT_VERSION = "v5" as const;
+export const ROLLUP_PROMPT_VERSION = "v6" as const;
 
 export interface DailyWriteResult {
   path: string;
@@ -157,30 +157,31 @@ export function stripCodeFenceWrap(content: string): string {
 }
 
 /**
- * Deterministic fallback — embeds + dataview only. Legacy behavior.
+ * Deterministic fallback — plain-text roster + dataview only.
+ *
+ * Parity with daily-rollup.v6 (R9): NO per-pulse `![[…#TL;DR]]` transclusions,
+ * NO `[[…|See full pulse]]` wiki-links, NO Previous/Next date-chain — those
+ * bridged the Timeline into every project cluster. Per-project navigation is
+ * carried by the dataview (dataview links are not graph edges) and the single
+ * dashboard entry point.
  */
 export function renderFallback(date: string, pulses: PulseForRollup[]): string {
   const monthTag = date.slice(0, 7);
   const lines: string[] = [];
   lines.push("---");
   lines.push(`date: ${date}`);
-  lines.push(`tags: [daily, daily/${monthTag}]`);
+  lines.push(`tags: [daily, daily/${monthTag}, type/daily]`);
   lines.push(`aliases: ["Daily ${date}"]`);
   lines.push(`pulses_count: ${pulses.length}`);
   lines.push(`fallback_render: true`);
   lines.push("---");
   lines.push("");
   lines.push(`> [!summary]+ Daily ${date}`);
-  lines.push(`> ${pulses.length} pulses generated — embeds below (deterministic fallback).`);
+  lines.push(`> ${pulses.length} pulses generated — see the dataview below (deterministic fallback).`);
   lines.push("");
 
   for (const p of pulses) {
-    const noteName = `${date}-${p.project}`;
     lines.push(`## ${p.project}`);
-    lines.push("");
-    lines.push(`![[${noteName}#TL;DR]]`);
-    lines.push("");
-    lines.push(`→ [[${noteName}|View full pulse]]`);
     lines.push("");
   }
 
@@ -194,15 +195,8 @@ export function renderFallback(date: string, pulses: PulseForRollup[]): string {
   lines.push("```");
   lines.push("");
 
-  const dt = new Date(`${date}T00:00:00`);
-  const prev = new Date(dt);
-  prev.setDate(prev.getDate() - 1);
-  const next = new Date(dt);
-  next.setDate(next.getDate() + 1);
   lines.push("## Navigation");
   lines.push("");
-  lines.push(`- ← [[${formatDate(prev)}|Previous day]]`);
-  lines.push(`- → [[${formatDate(next)}|Next day]]`);
   lines.push(`- [[Janus Pulse|Global dashboard]]`);
   lines.push("");
 
@@ -216,11 +210,4 @@ export function renderDailyContent(date: string, results: ProjectResult[]): stri
     .sort((a, b) => a.project.localeCompare(b.project))
     .map((r) => ({ project: r.project, content: r.contentPreview ?? "" }));
   return renderFallback(date, pulses);
-}
-
-function formatDate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
 }

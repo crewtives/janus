@@ -10,9 +10,9 @@ import { materializeTracks, parseTracks, recordTrackLineage } from "./tracks.ts"
 import { stripCodeFenceWrap } from "./daily.ts";
 import { loadVoiceSpec } from "./template.ts";
 import { Checkpoint } from "./checkpoint.ts";
-import weeklyRollupTemplate from "../prompts/weekly-rollup.v5.md" with { type: "text" };
+import weeklyRollupTemplate from "../prompts/weekly-rollup.v6.md" with { type: "text" };
 
-export const WEEKLY_PROMPT_VERSION = "v5" as const;
+export const WEEKLY_PROMPT_VERSION = "v6" as const;
 
 interface DailyForRollup {
   date: string;

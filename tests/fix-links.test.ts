@@ -23,22 +23,20 @@ async function setup(pulses: Array<{ date: string; prevLink: string | null }>): 
 }
 
 describe("fixBrokenPreviousLinks", () => {
-  test("replaces a link to a non-existent file with the real previous pulse", async () => {
+  // R10: fix-links no longer maintains the `- Pulse anterior: [[…]]` date-chain.
+  // A broken date-chain wikilink is just degraded to plain text (no edge kept).
+  test("a broken date-chain wikilink degrades to plain text (no date-chain edge)", async () => {
     const { obsidianPath, cleanup } = await setup([
-      { date: "2026-05-13", prevLink: "2026-05-12-test-proj" }, // broken
-      { date: "2026-05-15", prevLink: "2026-05-14-test-proj" }, // broken
+      { date: "2026-05-13", prevLink: "2026-05-12-test-proj" }, // broken, no streak covers it
+      { date: "2026-05-15", prevLink: "2026-05-14-test-proj" }, // broken, no streak covers it
     ]);
     const r = await fixBrokenPreviousLinks({ obsidianPath, project: "test-proj" });
     expect(r.brokenLinksRemoved).toBe(2);
-    expect(r.fixedLinks).toBe(1); // solo el del 15 puede repararse (apunta al 13)
-    expect(r.pulsesFixed).toBe(2);
-
-    const day13 = await readFile(join(obsidianPath, "pulse", "2026-05-13-test-proj.md"), "utf-8");
-    expect(day13).toContain("sin pulse anterior en la bóveda");
+    expect(r.fixedLinks).toBe(0); // nothing to redirect to → plain text
 
     const day15 = await readFile(join(obsidianPath, "pulse", "2026-05-15-test-proj.md"), "utf-8");
-    expect(day15).toContain("Pulse anterior: [[2026-05-13-test-proj]]");
-    expect(day15).not.toContain("2026-05-14");
+    expect(day15).not.toContain("[[2026-05-14-test-proj]]"); // broken edge removed
+    expect(day15).toContain("2026-05-14"); // mention preserved as text
 
     await cleanup();
   });
@@ -64,18 +62,6 @@ describe("fixBrokenPreviousLinks", () => {
     expect(r.pulsesFixed).toBe(1); // contado, pero no escrito
     const content = await readFile(join(obsidianPath, "pulse", "2026-05-13-test-proj.md"), "utf-8");
     expect(content).toContain("2026-05-12-test-proj"); // sigue igual
-    await cleanup();
-  });
-
-  test("link to a previous pulse with a gap (compacted) resolves to the real immediate previous", async () => {
-    const { obsidianPath, cleanup } = await setup([
-      { date: "2026-05-13", prevLink: null }, // primer pulse (en realidad un streak)
-      { date: "2026-05-20", prevLink: "2026-05-19-test-proj" }, // gap por compactación
-    ]);
-    const r = await fixBrokenPreviousLinks({ obsidianPath, project: "test-proj" });
-    expect(r.fixedLinks).toBe(1);
-    const day20 = await readFile(join(obsidianPath, "pulse", "2026-05-20-test-proj.md"), "utf-8");
-    expect(day20).toContain("[[2026-05-13-test-proj]]");
     await cleanup();
   });
 

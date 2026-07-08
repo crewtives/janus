@@ -97,6 +97,21 @@ export function setKey(frontmatter: string, key: string, value: string): string 
 }
 
 /**
+ * Remove a scalar `key: value` line if present. Idempotent: absent key → input
+ * unchanged. Used for prev/next at a chronology boundary (first pulse has no
+ * `prev:`, last has no `next:`) so a stale key left by an earlier state — e.g.
+ * a compacted streak deleting the successor — is cleared, not kept.
+ */
+export function removeKey(frontmatter: string, key: string): string {
+  const re = new RegExp(`^${key}:.*$`, "m");
+  if (!re.test(frontmatter)) return frontmatter;
+  return frontmatter
+    .split("\n")
+    .filter((line) => !new RegExp(`^${key}:`).test(line))
+    .join("\n");
+}
+
+/**
  * Read the freeze flags from the frontmatter BLOCK only (R19). Body prose that
  * happens to contain `needs_review: false` must never freeze a note — 274 notes
  * mention it in prose, zero carry it in frontmatter. Returns null when absent.

@@ -2,6 +2,11 @@
 /**
  * Thin CLI wrapper. La lógica vive en src/core/scaffold/fix-related.ts.
  *
+ * Desde Fase 2 (R10) esto ya NO escribe la línea `- Pulse anterior: [[…]]`:
+ * canonicaliza el up-link `- Hub:` y estampa la cronología en `prev:`/`next:`
+ * del frontmatter (propiedad, no arista de grafo). El nombre del script se
+ * mantiene por compatibilidad de invocación.
+ *
  * Uso:
  *   bun run scripts/fix-pulse-anterior-links.ts            # repara y reporta
  *   bun run scripts/fix-pulse-anterior-links.ts --dry-run  # solo reporta
@@ -10,7 +15,7 @@
 import { fixAllRelated } from "../src/core/scaffold/fix-related.ts";
 
 // Re-export para tests que ya importan desde este path.
-export { fixRelatedSection } from "../src/core/scaffold/fix-related.ts";
+export { fixRelatedSection, writePrevNext, fixProject } from "../src/core/scaffold/fix-related.ts";
 
 interface CliArgs {
   dryRun: boolean;

@@ -41,7 +41,7 @@ function renderHub(project: ProjectConfig, vaultRelPath: string): string {
   return `---
 type: project-hub
 project: ${project.name}
-tags: [project-hub]
+tags: [project-hub, type/hub, project/${project.name}]
 aliases: ["${alias}"]
 ---
 

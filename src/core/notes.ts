@@ -7,7 +7,7 @@
  *
  *  1. Finds relevant material in the vault (FTS5 + project filter + ADR refs).
  *  2. Builds the prompt context.
- *  3. Calls the LLM with `note-draft.v1.md` + a portfolio-adapted voice spec.
+ *  3. Calls the LLM with `note-draft.v3.md` + a portfolio-adapted voice spec.
  *  4. Writes the draft to `<vault>/Notes/<YYYY-MM-DD>-<slug>.md`.
  *
  * The output is a draft — the user edits it, tweaks tone, and moves it into
@@ -24,9 +24,9 @@ import { stripCodeFenceWrap } from "./daily.ts";
 import { addTags, joinFrontmatter, prependFrontmatter, setKey, splitFrontmatter } from "./frontmatter.ts";
 import { loadVoiceSpec } from "./template.ts";
 import { SearchIndex } from "./search-index.ts";
-import noteDraftTemplate from "../prompts/note-draft.v2.md" with { type: "text" };
+import noteDraftTemplate from "../prompts/note-draft.v3.md" with { type: "text" };
 
-export const NOTE_PROMPT_VERSION = "v2" as const;
+export const NOTE_PROMPT_VERSION = "v3" as const;
 
 const eta = new Eta({ autoEscape: false, rmWhitespace: false });
 
@@ -54,6 +54,8 @@ export interface NoteDraftResult {
   contextDocs: number;
   promptChars: number;
   outputChars: number;
+  /** Project the note was attributed to (explicit --project, or inferred from context). */
+  project: string | null;
 }
 
 /**
@@ -127,6 +129,21 @@ async function gatherContext(
 }
 
 /**
+ * The project that dominates the gathered context, used to attribute (and
+ * graph-wire) a note when the caller didn't pass `--project`. A note is written
+ * from real material, and that material carries project ids — so the note is
+ * never left an orphan. Returns null when no context doc names a project.
+ */
+function dominantProject(docs: ContextDoc[]): string | null {
+  const counts = new Map<string, number>();
+  for (const d of docs) if (d.project) counts.set(d.project, (counts.get(d.project) ?? 0) + 1);
+  let best: string | null = null;
+  let bestN = 0;
+  for (const [p, n] of counts) if (n > bestN) { best = p; bestN = n; }
+  return best;
+}
+
+/**
  * Renders the prompt and returns the string. Useful for dry-run or testing.
  */
 export async function renderNotePrompt(opts: {
@@ -192,6 +209,9 @@ export async function generateNoteDraft(
   const contextLimit = opts.contextLimit ?? 8;
 
   const contextDocs = await gatherContext(config, opts.topic, contextLimit, opts.project);
+  // Explicit --project wins; otherwise attribute to the dominant project in the
+  // context so the note is graph-wired (R13) instead of landing as an orphan.
+  const project = opts.project ?? dominantProject(contextDocs);
   const prompt = await renderNotePrompt({
     topic: opts.topic,
     title: opts.title,
@@ -210,6 +230,7 @@ export async function generateNoteDraft(
       contextDocs: contextDocs.length,
       promptChars: prompt.length,
       outputChars: 0,
+      project,
     };
   }
 
@@ -230,7 +251,7 @@ export async function generateNoteDraft(
   if (!content) throw new Error("LLM returned empty content");
 
   await mkdir(dirname(targetPath), { recursive: true });
-  await writeFile(targetPath, withNoteFrontmatter(content, opts.project));
+  await writeFile(targetPath, withNoteFrontmatter(content, project ?? undefined));
 
   return {
     path: targetPath,
@@ -239,18 +260,35 @@ export async function generateNoteDraft(
     contextDocs: contextDocs.length,
     promptChars: prompt.length,
     outputChars: content.length,
+    project,
   };
 }
 
 /**
- * Prepend the canonical note frontmatter (R12/R13) to an LLM-generated note.
+ * Append a `## Related` hub backlink so a Note gets one graph edge into its
+ * project cluster (R13). Without an edge the note is an orphan and the graph
+ * (`showOrphans: false`) never renders it. The backlink goes in a trailing
+ * metadata section — the LLM prose above is never touched. Idempotent: an
+ * existing `- Hub: [[<projectId>]]` line short-circuits, so re-wrapping a note
+ * is a byte-for-byte no-op.
+ */
+export function appendHubBacklink(body: string, projectId: string): string {
+  const backlink = `- Hub: [[${projectId}]]`;
+  if (body.split("\n").some((line) => line.trim() === backlink)) return body;
+  return `${body.replace(/\n+$/, "")}\n\n## Related\n\n${backlink}\n`;
+}
+
+/**
+ * Prepend the canonical note frontmatter (R12/R13) to an LLM-generated note and,
+ * when the project is known, wire it to the graph.
  *
  * The note-draft prompt deliberately emits NO frontmatter (Topic/Date are bold
  * markdown after the H1), so a Notes draft is all body — the classifier can't
  * derive its project from path/filename either. This wrapper attaches the
- * `type/note` tag now, plus `project/<id>` when the caller knows it (KD5); the
- * hub backlink stays deferred so we never mutate the LLM prose. Idempotent, and
- * defensive if a note ever arrives with its own frontmatter.
+ * `type/note` tag now, plus — when the caller knows the project — a `project/<id>`
+ * tag, a `project:` scalar, and a hub backlink (R13, previously deferred as
+ * OQ2/KD5). Idempotent, and defensive if a note ever arrives with its own
+ * frontmatter.
  */
 export function withNoteFrontmatter(content: string, project?: string): string {
   const tags = project ? ["type/note", `project/${project}`] : ["type/note"];
@@ -258,12 +296,14 @@ export function withNoteFrontmatter(content: string, project?: string): string {
   if (split.hadFrontmatter) {
     let fm = addTags(split.frontmatter, tags);
     if (project) fm = setKey(fm, "project", project);
-    return joinFrontmatter(fm, split.body);
+    const body = project ? appendHubBacklink(split.body, project) : split.body;
+    return joinFrontmatter(fm, body);
   }
+  const body = project ? appendHubBacklink(content, project) : content;
   const lines = ["type: note"];
   if (project) lines.push(`project: ${project}`);
   lines.push(`tags: [${tags.join(", ")}]`);
-  return prependFrontmatter(lines, content);
+  return prependFrontmatter(lines, body);
 }
 
 /**

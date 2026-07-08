@@ -16,7 +16,6 @@ const fakeResults: ProjectResult[] = [
     status: "ok",
     contentPreview: "TL;DR\nSmoke test del webhook — Janus listo para postear pulses diarios. El sistema arrancó, doctor 13/13 OK, ahora valida la cadena hasta Discord.",
     obsidianPath: "/test/pulse.md",
-    repoPath: "/test/pulse.md",
   },
 ];
 

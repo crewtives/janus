@@ -469,9 +469,8 @@ async function processProject(args: {
     console.warn(`${tag} validation warnings: ${validation.warnings.join("; ")}`);
   }
 
-  const { obsidianTarget, repoTarget } = await writePulse({
+  const { obsidianTarget } = await writePulse({
     obsidianPath: project.obsidianPath,
-    repoPath: project.repoPath,
     project: project.name,
     date,
     content,
@@ -517,14 +516,12 @@ async function processProject(args: {
     console.warn(`${tag} index (FTS5) failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`);
   }
   console.log(`${tag} ✓ written to ${obsidianTarget}`);
-  console.log(`${tag} ✓ written to ${repoTarget}`);
 
   return {
     project: project.name,
     date,
     status: "ok",
     obsidianPath: obsidianTarget,
-    repoPath: repoTarget,
     contentPreview: content.slice(0, 240),
   };
 }

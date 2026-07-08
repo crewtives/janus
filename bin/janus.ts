@@ -17,6 +17,7 @@ const main = defineCommand({
     yearly: () => import("../src/commands/yearly.ts").then((m) => m.default),
     index: () => import("../src/commands/index.ts").then((m) => m.default),
     enrich: () => import("../src/commands/enrich.ts").then((m) => m.default),
+    defuse: () => import("../src/commands/defuse.ts").then((m) => m.default),
     ask: () => import("../src/commands/ask.ts").then((m) => m.default),
     adr: () => import("../src/commands/adr.ts").then((m) => m.default),
     "archive-tracks": () => import("../src/commands/archive-tracks.ts").then((m) => m.default),

@@ -28,7 +28,6 @@ for (const project of config.projects) {
   if (onlyProject && project.name !== onlyProject) continue;
   const r = await fixBrokenPreviousLinks({
     obsidianPath: project.obsidianPath,
-    repoPath: project.repoPath,
     project: project.name,
     dryRun,
   });

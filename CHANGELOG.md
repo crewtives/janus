@@ -5,6 +5,7 @@ All notable changes to Janus are recorded here. The format follows [Keep a Chang
 ## [Unreleased]
 
 ### Fixed
+- **An authored repo `STRATEGY.md` is no longer masked by an empty vault template.** `detectStrategyStatus` and `readStrategy` returned the first-existing candidate (vault before repo), so a scaffolded vault mirror (`needs_review: true`) hid a filled repo `STRATEGY.md` — making pulses and the spine report "no north star" for a project that had actually defined one. A shared `pickBestStrategy` now prefers a filled file over a template draft (ties resolve to the vault).
 - **Homebrew installs on Apple Silicon no longer strand on a stale version.** `bumpFormula` now re-pins every asset URL to `v#{version}`, so a formula block that hardcodes a literal version can't keep serving an old binary past a release bump. The macOS `on_arm` URL had been pinned to `v0.2.8` since 0.2.8 — every `brew install/upgrade` on arm64 through 0.3.1 silently fetched that binary and failed the new release's checksum. (The live tap formula was fixed out-of-band.)
 
 ## [0.3.1] — 2026-07-08

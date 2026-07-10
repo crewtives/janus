@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { pickBestStrategy } from "./strategy-status.ts";
 
 export async function readIfExists(path: string): Promise<string | null> {
   if (!existsSync(path)) return null;
@@ -16,16 +17,13 @@ export function claudeMdPath(repoPath: string): string {
 }
 
 /**
- * STRATEGY.md lives in the Obsidian vault or in the repo (vault takes priority).
+ * STRATEGY.md lives in the Obsidian vault or in the repo. A filled file wins over
+ * a template draft (see `pickBestStrategy`); ties resolve to the vault.
  * `ce-strategy` pattern: project north star (problem, approach, metrics, users, tracks).
  */
 export async function readStrategy(obsidianPath: string, repoPath: string): Promise<string | null> {
-  const candidates = [join(obsidianPath, "STRATEGY.md"), join(repoPath, "STRATEGY.md")];
-  for (const p of candidates) {
-    const content = await readIfExists(p);
-    if (content) return content;
-  }
-  return null;
+  const best = await pickBestStrategy(obsidianPath, repoPath);
+  return best?.content ?? null;
 }
 
 /**

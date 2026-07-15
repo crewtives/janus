@@ -172,6 +172,26 @@ export class SearchIndex {
     return rows;
   }
 
+  /**
+   * Deletes every indexed doc whose docId is not in `seen`, and returns the removed ids.
+   *
+   * docIds are vault-relative paths, so a file that moves (a monthly archiving a pulse
+   * into `_archive/`) leaves the old path behind as a dangling doc: `ask` keeps citing a
+   * path that no longer resolves. Upsert alone can never notice that.
+   *
+   * Callers must pass the docIds of a scan that covered the WHOLE index scope. Reconciling
+   * against a partial scan deletes everything the scan did not happen to visit.
+   */
+  reconcile(seen: Set<string>): string[] {
+    const rows = this.db.query(`SELECT doc_id FROM pulse_docs`).all() as Array<{ doc_id: string }>;
+    const stale = rows.map((r) => r.doc_id).filter((id) => !seen.has(id));
+    const tx = this.db.transaction(() => {
+      for (const id of stale) this.remove(id);
+    });
+    tx();
+    return stale;
+  }
+
   /** Document count per kind (useful for verification). */
   stats(): Record<DocKind, number> {
     const rows = this.db.query(`SELECT kind, COUNT(*) as n FROM pulse_docs GROUP BY kind`).all() as Array<{ kind: DocKind; n: number }>;
@@ -201,10 +221,18 @@ export function sanitizeQuery(q: string): string {
   // double quote (phrase), or asterisk (prefix wildcard) is replaced with
   // a space. This preserves useful tokens and removes problematic FTS5
   // operators (`-`, `+`, `:`, `'`, `\\`, smart quotes, control chars).
-  return q
+  const cleaned = q
     .replace(/[^a-zA-Z0-9\s"*]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+
+  // An odd number of quotes is an unterminated phrase: FTS5 raises `unterminated
+  // string`, which surfaced as a raw SQLiteError stack in the CLI. Which quote is
+  // the unmatched one is ambiguous, so drop them all and degrade the phrase to
+  // plain AND terms rather than guessing.
+  const quotes = (cleaned.match(/"/g) ?? []).length;
+  if (quotes % 2 !== 0) return cleaned.replace(/"/g, " ").replace(/\s+/g, " ").trim();
+  return cleaned;
 }
 
 // ---- on-disk indexing helpers ----
@@ -222,10 +250,12 @@ export interface ScanOptions {
 export async function scanVault(opts: ScanOptions): Promise<IndexedDoc[]> {
   const includeArchive = opts.includeArchive ?? true;
   const docs: IndexedDoc[] = [];
+  const missing: string[] = [];
 
   // Pulses individuales + archive
   const projectsRoot = join(opts.vaultPath, "Projects");
-  if (existsSync(projectsRoot)) {
+  if (!existsSync(projectsRoot)) missing.push("Projects");
+  else {
     const glob = new Bun.Glob("**/pulse/*.md");
     for await (const rel of glob.scan({ cwd: projectsRoot, absolute: false })) {
       const abs = join(projectsRoot, rel);
@@ -256,79 +286,45 @@ export async function scanVault(opts: ScanOptions): Promise<IndexedDoc[]> {
     }
   }
 
-  // Dailys
-  const dailyDir = join(opts.vaultPath, "Daily");
-  if (existsSync(dailyDir)) {
-    for (const name of await readdir(dailyDir)) {
+  // Flat directories. The relative paths must match the WRITERS: dailies, weeklies and
+  // monthlies land under Timeline/ (daily.ts, weekly.ts, monthly.ts), quarterlies and
+  // yearlies too (aggregations.ts). This used to read `Daily/`, `Daily/Weekly`, … — dirs
+  // that never existed, so every one of these kinds silently indexed as zero.
+  for (const [rel, kind] of FLAT_DIRS) {
+    const dir = join(opts.vaultPath, rel);
+    if (!existsSync(dir)) {
+      missing.push(rel);
+      continue;
+    }
+    for (const name of await readdir(dir)) {
       if (name.endsWith(".md")) {
-        const doc = await parseDoc(join(dailyDir, name), opts.vaultPath, "daily");
+        const doc = await parseDoc(join(dir, name), opts.vaultPath, kind);
         if (doc) docs.push(doc);
       }
     }
   }
-  // Weekly
-  const weeklyDir = join(opts.vaultPath, "Daily", "Weekly");
-  if (existsSync(weeklyDir)) {
-    for (const name of await readdir(weeklyDir)) {
-      if (name.endsWith(".md")) {
-        const doc = await parseDoc(join(weeklyDir, name), opts.vaultPath, "weekly");
-        if (doc) docs.push(doc);
-      }
-    }
-  }
-  // Monthly
-  const monthlyDir = join(opts.vaultPath, "Daily", "Monthly");
-  if (existsSync(monthlyDir)) {
-    for (const name of await readdir(monthlyDir)) {
-      if (name.endsWith(".md")) {
-        const doc = await parseDoc(join(monthlyDir, name), opts.vaultPath, "monthly");
-        if (doc) docs.push(doc);
-      }
-    }
-  }
-  // Quarterly
-  const qDir = join(opts.vaultPath, "Daily", "Quarterly");
-  if (existsSync(qDir)) {
-    for (const name of await readdir(qDir)) {
-      if (name.endsWith(".md")) {
-        const doc = await parseDoc(join(qDir, name), opts.vaultPath, "quarterly");
-        if (doc) docs.push(doc);
-      }
-    }
-  }
-  // Yearly
-  const yDir = join(opts.vaultPath, "Daily", "Yearly");
-  if (existsSync(yDir)) {
-    for (const name of await readdir(yDir)) {
-      if (name.endsWith(".md")) {
-        const doc = await parseDoc(join(yDir, name), opts.vaultPath, "yearly");
-        if (doc) docs.push(doc);
-      }
-    }
-  }
-  // Tracks
-  const tracksDir = join(opts.vaultPath, "MOCs", "Tracks");
-  if (existsSync(tracksDir)) {
-    for (const name of await readdir(tracksDir)) {
-      if (name.endsWith(".md")) {
-        const doc = await parseDoc(join(tracksDir, name), opts.vaultPath, "track");
-        if (doc) docs.push(doc);
-      }
-    }
-  }
-  // ADRs
-  const adrDir = join(opts.vaultPath, "Decisions");
-  if (existsSync(adrDir)) {
-    for (const name of await readdir(adrDir)) {
-      if (name.endsWith(".md")) {
-        const doc = await parseDoc(join(adrDir, name), opts.vaultPath, "adr");
-        if (doc) docs.push(doc);
-      }
-    }
+  // A missing directory used to be indistinguishable from an empty one, which is why the
+  // Daily/ vs Timeline/Daily/ mismatch above survived for so long. Some of these are
+  // legitimately absent until first write (Quarterly, Yearly, Decisions), so this reports
+  // rather than throws.
+  if (missing.length > 0) {
+    console.warn(`[scan] warning: ${missing.length} expected director${missing.length === 1 ? "y" : "ies"} not found, indexed as empty: ${missing.join(", ")}`);
   }
 
   return docs;
 }
+
+const FLAT_DIRS: ReadonlyArray<readonly [string, DocKind]> = [
+  [join("Timeline", "Daily"), "daily"],
+  [join("Timeline", "Weekly"), "weekly"],
+  [join("Timeline", "Monthly"), "monthly"],
+  [join("Timeline", "Quarterly"), "quarterly"],
+  [join("Timeline", "Yearly"), "yearly"],
+  [join("MOCs", "Tracks"), "track"],
+  // adr.ts writes to <vault>/Decisions/ — this path is correct; the dir simply does not
+  // exist until the first ADR is created.
+  ["Decisions", "adr"],
+];
 
 async function parseDoc(absPath: string, vaultPath: string, kind: DocKind): Promise<IndexedDoc | null> {
   const content = await readFile(absPath, "utf-8");

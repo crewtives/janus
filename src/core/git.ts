@@ -25,6 +25,18 @@ export interface GitActivity {
 
 const GIT_LOG_FORMAT = "%H%x1f%h%x1f%an%x1f%aI%x1f%s%x1f%b%x1e";
 
+// git log walks HEAD by default, so a pulse only saw whatever branch happened to be checked
+// out when it ran. Merge commits preserve the original committer dates, so work committed on a
+// branch and merged the next day lands in a window that was already processed: no pulse ever
+// reports it. --branches covers every local branch and git's revision walk visits each commit
+// once, so there is nothing to deduplicate.
+//
+// Deliberately narrower than --all, which drags in refs/remotes (bot-pushed dependency PR
+// branches the user never wrote) and refs/stash. And deliberately without an explicit HEAD:
+// it would only add commits made on a detached HEAD — which git itself treats as collectable —
+// at the cost of exiting 128 on a repo with no commits yet, where HEAD resolves to nothing.
+const LOG_REVS = ["--branches"];
+
 export async function getActivity(repoPath: string, sinceISO: string, untilISO?: string): Promise<GitActivity> {
   const [commits, diffStat, branch, status, numstat] = await Promise.all([
     getCommits(repoPath, sinceISO, untilISO),
@@ -51,7 +63,7 @@ export async function getActivity(repoPath: string, sinceISO: string, untilISO?:
 }
 
 export async function getNumstat(repoPath: string, sinceISO: string, untilISO?: string): Promise<string> {
-  const args = ["log", `--since=${sinceISO}`, "--pretty=format:", "--numstat"];
+  const args = ["log", ...LOG_REVS, `--since=${sinceISO}`, "--pretty=format:", "--numstat"];
   if (untilISO) args.push(`--until=${untilISO}`);
   return runGit(repoPath, args);
 }
@@ -102,6 +114,7 @@ function countTopFolders(files: string[], topN: number): Array<{ folder: string;
 export async function getCommits(repoPath: string, sinceISO: string, untilISO?: string): Promise<GitCommit[]> {
   const args = [
     "log",
+    ...LOG_REVS,
     `--since=${sinceISO}`,
     `--pretty=format:${GIT_LOG_FORMAT}`,
   ];
@@ -118,6 +131,7 @@ export async function getCommits(repoPath: string, sinceISO: string, untilISO?: 
 export async function getDiffStat(repoPath: string, sinceISO: string, untilISO?: string): Promise<string> {
   const args = [
     "log",
+    ...LOG_REVS,
     `--since=${sinceISO}`,
     "--pretty=format:",
     "--stat",

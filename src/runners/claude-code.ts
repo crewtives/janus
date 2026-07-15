@@ -76,6 +76,8 @@ export class ClaudeCodeRunner implements LLMRunner {
     let observedSessionId = sessionId;
     let numTurns = 0;
     let initSeen = false;
+    let resultIsError = false;
+    let resultSubtype = "";
 
     try {
       await streamLines(proc.stdout, (line) => {
@@ -99,9 +101,9 @@ export class ClaudeCodeRunner implements LLMRunner {
           if (typeof msg.result === "string") resultText = msg.result;
           if (typeof msg.total_cost_usd === "number") totalCostUsd = msg.total_cost_usd;
           if (typeof msg.num_turns === "number") numTurns = msg.num_turns;
-          const isError = msg.is_error === true;
-          const subtype = String(msg.subtype ?? "");
-          process.stderr.write(`${tag} result: subtype=${subtype} error=${isError} turns=${numTurns}\n`);
+          resultIsError = msg.is_error === true;
+          resultSubtype = String(msg.subtype ?? "");
+          process.stderr.write(`${tag} result: subtype=${resultSubtype} error=${resultIsError} turns=${numTurns}\n`);
         }
       });
 
@@ -130,6 +132,19 @@ export class ClaudeCodeRunner implements LLMRunner {
           // exit 1 is typically invalid input or auth → not retriable.
           // exit 137 (SIGKILL from timeout) or exit codes > 1 can be retriable.
           exitCode !== 1,
+          resultText || undefined,
+        );
+      }
+
+      if (resultIsError) {
+        // The CLI reports failures (error_max_turns, error_during_execution) in
+        // the result message while still exiting 0. Returning that as a normal
+        // result hands callers an error string — or "" — dressed up as content.
+        throw new RunnerError(
+          `claude reported an error result (subtype=${resultSubtype || "?"})`,
+          exitCode,
+          stderr.trim(),
+          true,
           resultText || undefined,
         );
       }

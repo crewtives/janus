@@ -11,9 +11,14 @@ export default defineCommand({
       description: "Path to the dead-letter file (default: .janus/failed.jsonl)",
       default: ".janus/failed.jsonl",
     },
+    force: {
+      type: "boolean",
+      description: "Reprocess entries already marked done (overwrites their pulse)",
+      default: false,
+    },
   },
   async run({ args }) {
     const { runRetry } = await import("../pipeline/orchestrator.ts");
-    await runRetry({ from: args.from });
+    await runRetry({ from: args.from, force: args.force });
   },
 });

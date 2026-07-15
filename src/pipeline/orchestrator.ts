@@ -41,16 +41,37 @@ export async function runPulse(opts: RunPulseOptions): Promise<void> {
     process.exit(1);
   }
 
-  const dates = determineDates(opts);
+  const stateDir = config.stateDir!;
+  await mkdir(stateDir, { recursive: true });
+
+  const cp = Checkpoint.open(stateDir);
+
+  let dates = determineDates(opts);
+  // Catch-up backstop, same reasoning as the monthly/weekly ones below: launchd
+  // does not re-run what it missed, and the cron path only ever asks for
+  // yesterday — so a failed pulse or a day the machine slept through is lost
+  // forever.
+  if (shouldCatchUp(opts)) {
+    const catchUp = computeCatchUpDates({
+      cp,
+      projects,
+      yesterday: yesterdayLocal(),
+      windowDays: CATCH_UP_WINDOW_DAYS,
+    }).filter((e) => !dates.includes(e.date));
+    if (catchUp.length > 0) {
+      for (const e of catchUp) {
+        const why = e.reason === "failed" ? "previous run failed" : "no pulse recorded";
+        console.log(`[janus] catch-up ${e.project}/${e.date} — ${why}`);
+      }
+      dates = [...new Set([...dates, ...catchUp.map((e) => e.date)])].sort();
+    }
+  }
+
   console.log(`[janus] projects: ${projects.map((p) => p.name).join(", ")}`);
   console.log(`[janus] dates: ${dates.join(", ")}`);
   console.log(`[janus] dry-run: ${opts.dryRun ? "yes" : "no"}`);
   if (opts.force) console.log(`[janus] force: yes — reprocessing even if already done`);
 
-  const stateDir = config.stateDir!;
-  await mkdir(stateDir, { recursive: true });
-
-  const cp = Checkpoint.open(stateDir);
   const queue = makeQueue({
     concurrency: config.concurrency!,
     intervalCap: config.intervalCap!,
@@ -160,6 +181,9 @@ export async function runPulse(opts: RunPulseOptions): Promise<void> {
   // Fallback: if any date was never notified (all projects skipped by idempotency,
   // expected === 0 → the callback never ran) → there's nothing to notify anyway. OK.
   printSummary(results);
+  // Signal failure to whatever supervises the run. process.exitCode, never
+  // process.exit(): the enrich + self-heal blocks below still have to run.
+  if (results.some((r) => r.status === "failed")) process.exitCode = 1;
 
   // Enrich the vault (idempotent). Only when at least one real ok exists to avoid touching files in dry-run.
   if (!opts.dryRun && results.some((r) => r.status === "ok")) {
@@ -254,16 +278,21 @@ export async function runPulse(opts: RunPulseOptions): Promise<void> {
   }
 }
 
-export async function runRetry(opts: { from: string }): Promise<void> {
+export async function runRetry(opts: { from: string; force?: boolean | undefined }): Promise<void> {
   const text = await Bun.file(opts.from).text();
   const lines = text.split("\n").filter((l) => l.trim());
   if (lines.length === 0) {
     console.log("[janus] nothing to retry.");
     return;
   }
-  console.log(`[janus] retrying ${lines.length} entries from ${opts.from}`);
   const config = await loadConfig();
   const cp = Checkpoint.open(config.stateDir!);
+
+  const { planned, skipped } = planRetry({ lines, projects: config.projects, cp, force: opts.force });
+  for (const s of skipped) console.log(`[retry] ${s.project}:${s.date} — ${s.reason}`);
+
+  console.log(`[janus] retrying ${planned.length} of ${lines.length} entries from ${opts.from}`);
+  if (opts.force) console.log(`[janus] force: yes — reprocessing even if already done`);
 
   const queue = makeQueue({
     concurrency: config.concurrency!,
@@ -274,27 +303,94 @@ export async function runRetry(opts: { from: string }): Promise<void> {
   });
 
   const results: ProjectResult[] = [];
-  for (const line of lines) {
-    const entry = safeParseEntry(line);
-    if (!entry) continue;
-    const project = config.projects.find((p) => p.name === entry.project);
-    if (!project) {
-      console.warn(`[retry] project ${entry.project} not in config, skip`);
-      continue;
-    }
-    queue
-      .add(() =>
-        withRetry(() => processProject({ project, date: entry.date, config, cp, dryRun: false }), { retries: 2 }),
-      )
-      .then((res) => res && results.push(res))
-      .catch((err: unknown) => {
+  const stillFailing: Array<{ project: string; date: string; error: string; at: string }> = [];
+  for (const { project, date } of planned) {
+    void queue.add(async () => {
+      try {
+        const res = await withRetry(() => processProject({ project, date, config, cp, dryRun: false }), {
+          retries: 2,
+        });
+        if (res) results.push(res);
+      } catch (err) {
         const m = err instanceof Error ? err.message : String(err);
-        results.push({ project: project.name, date: entry.date, status: "failed", error: m });
-      });
+        console.error(`[retry] ${project.name}/${date} FAILED:`, m);
+        results.push({ project: project.name, date, status: "failed", error: m });
+        stillFailing.push({ project: project.name, date, error: m, at: new Date().toISOString() });
+      }
+    });
   }
   await queue.onIdle();
   cp.close();
+
+  // Rewrite the dead-letter with what is still dead. Everything else was either
+  // repaired now or was already stale — keeping it would make the next retry
+  // replay the same destructive set.
+  await Bun.write(opts.from, stillFailing.map((e) => JSON.stringify(e) + "\n").join(""));
+  console.log(`[janus] dead-letter rewritten: ${stillFailing.length} entries still failing`);
+
+  // A repaired pulse leaves the daily still lying: it is written once, when the
+  // date's tasks complete, and nothing revisits it. writeDailyConsolidated
+  // re-reads the day's pulses from disk, so this picks up the repair.
+  const repairedDates = [...new Set(results.filter((r) => r.status === "ok").map((r) => r.date))].sort();
+  for (const date of repairedDates) {
+    const daily = await writeDailyConsolidated({
+      vaultPath: config.obsidianVault,
+      date,
+      results: results.filter((r) => r.date === date),
+      config,
+    });
+    if (daily) {
+      const tag = daily.llmGenerated ? "[LLM]" : "[fallback]";
+      console.log(`[janus] daily consolidated ${tag}: ${daily.path} (${daily.projectCount} projects)`);
+    }
+  }
+
   printSummary(results);
+}
+
+export interface RetryPlan {
+  planned: Array<{ project: ProjectConfig; date: string }>;
+  skipped: Array<{ project: string; date: string; reason: string }>;
+}
+
+/**
+ * Decides what a `janus retry` actually reprocesses. The dead-letter is
+ * append-only: it accumulates duplicates and entries that a later run already
+ * repaired. Replaying it verbatim reprocesses pulses that are already good —
+ * writePulse overwrites without a backup and saveBaseline resets the feedback
+ * loop's baseline — so a blind replay destroys work instead of restoring it.
+ */
+export function planRetry(args: {
+  lines: string[];
+  projects: ProjectConfig[];
+  cp: Pick<Checkpoint, "isDone">;
+  force?: boolean | undefined;
+}): RetryPlan {
+  const { lines, projects, cp, force } = args;
+  const seen = new Set<string>();
+  const plan: RetryPlan = { planned: [], skipped: [] };
+  for (const line of lines) {
+    const entry = safeParseEntry(line);
+    if (!entry) continue;
+    const key = `${entry.project}:${entry.date}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const project = projects.find((p) => p.name === entry.project);
+    if (!project) {
+      plan.skipped.push({ ...entry, reason: "project not in config" });
+      continue;
+    }
+    if (project.status === "archived") {
+      plan.skipped.push({ ...entry, reason: "project archived in config" });
+      continue;
+    }
+    if (cp.isDone(entry.project, entry.date) && !force) {
+      plan.skipped.push({ ...entry, reason: "already done, skip (use --force to reprocess)" });
+      continue;
+    }
+    plan.planned.push({ project, date: entry.date });
+  }
+  return plan;
 }
 
 async function processProject(args: {
@@ -331,7 +427,7 @@ async function processProject(args: {
     detectProjectAnniversary({ project, checkpoint: cp, today: date }).catch(() => null),
     loadDayLastYearAnchor({ obsidianPath: project.obsidianPath, project: project.name, today: date }).catch(() => null),
   ]);
-  const sessions = await Promise.all(sessionFiles.map(summarizeSession));
+  const sessions = await Promise.all(sessionFiles.map((f) => summarizeSession(f, date)));
   if (anniversary) {
     console.log(`${tag} anniversary detected: ${anniversary.years} year(s) since ${anniversary.sinceDate} (${anniversary.source})`);
     // Phase 3 U4 — auto-trigger per-project Wrapped.
@@ -465,6 +561,9 @@ async function processProject(args: {
       throw new AbortError(`pulse invalid after retry: ${validation.errors.join("; ")}`);
     }
   }
+  // The pulse is valid, but validation may have salvaged it by cutting a preamble: persist what it
+  // vetted, not the raw answer. Skipping this is how a stripped preamble reaches the vault anyway.
+  if (validation.sanitized) content = validation.sanitized;
   if (validation.warnings.length > 0) {
     console.warn(`${tag} validation warnings: ${validation.warnings.join("; ")}`);
   }
@@ -561,6 +660,86 @@ function filterProjects(projects: ProjectConfig[], name?: string): ProjectConfig
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+/**
+ * How far back the catch-up looks. 7 days bounds the worst case to one LLM
+ * call per project per day of a week — a long outage (or a wiped state.db)
+ * degrades into a small recovery instead of an accidental multi-month
+ * backfill. Anything older is the weekly rollup's problem, not the pulse's.
+ */
+export const CATCH_UP_WINDOW_DAYS = 7;
+
+/**
+ * Catch-up is for the bare cron path only. `--date`/`--since`/`--backfill` name
+ * an explicit range and are honoured literally. `--force` is excluded for a
+ * sharper reason: it bypasses the `isDone` gate, so a `--force` widened by a
+ * week of recovered dates would rewrite good pulses the user never named, and
+ * `writePulse` keeps no backup. Catch-up only ever needs to add dates nobody
+ * has written yet — it never needs `--force` to do it.
+ */
+export function shouldCatchUp(opts: RunPulseOptions): boolean {
+  return !opts.date && !opts.since && !opts.backfill && !opts.force;
+}
+
+export interface CatchUpEntry {
+  project: string;
+  date: string;
+  /** `failed` = a run tried and lost it; `missing` = no run ever claimed it. */
+  reason: "failed" | "missing";
+}
+
+/**
+ * Dates the cron path would otherwise never revisit: (a) checkpoint failures,
+ * (b) the gap between a project's last done pulse and yesterday. Both clamped
+ * to the last `windowDays` days.
+ *
+ * A project with no done pulse at all is skipped: that is a project that never
+ * started, not a gap to recover — and treating it as one would make a fresh
+ * install backfill a week on first run.
+ */
+export function computeCatchUpDates(args: {
+  cp: Pick<Checkpoint, "queryFailed" | "lastDoneDate">;
+  projects: ProjectConfig[];
+  yesterday: string;
+  windowDays: number;
+}): CatchUpEntry[] {
+  const { cp, projects, yesterday, windowDays } = args;
+  const active = projects.filter((p) => p.status !== "archived");
+  if (active.length === 0) return [];
+  const names = new Set(active.map((p) => p.name));
+  const floor = addDays(yesterday, -(windowDays - 1));
+
+  const out: CatchUpEntry[] = [];
+  for (const rec of cp.queryFailed()) {
+    if (!names.has(rec.project)) continue;
+    if (rec.date < floor || rec.date > yesterday) continue;
+    out.push({ project: rec.project, date: rec.date, reason: "failed" });
+  }
+
+  const seen = new Set(out.map((e) => `${e.project}:${e.date}`));
+  for (const project of active) {
+    const lastDone = cp.lastDoneDate(project.name);
+    if (!lastDone) continue;
+    const start = maxDate(addDays(lastDone, 1), floor);
+    for (const date of datesBetween(start, yesterday)) {
+      const key = `${project.name}:${date}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ project: project.name, date, reason: "missing" });
+    }
+  }
+  return out;
+}
+
+function addDays(date: string, days: number): string {
+  const d = new Date(`${date}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return formatDate(d);
+}
+
+function maxDate(a: string, b: string): string {
+  return a > b ? a : b;
+}
+
 export function determineDates(opts: RunPulseOptions): string[] {
   if (opts.date) {
     if (!ISO_DATE_RE.test(opts.date)) {
@@ -569,7 +748,10 @@ export function determineDates(opts: RunPulseOptions): string[] {
     return [opts.date];
   }
   if (opts.since) {
-    return datesBetween(opts.since, todayLocal());
+    // Yesterday, not today: today is still half-lived. Writing it would mark it
+    // done, and tomorrow's cron would skip it — archiving a truncated day that
+    // reads as a complete one.
+    return datesBetween(opts.since, yesterdayLocal());
   }
   if (opts.backfill) {
     const m = opts.backfill.match(/^(\d+)\s*d$/i);
@@ -580,10 +762,6 @@ export function determineDates(opts: RunPulseOptions): string[] {
     return datesBetween(formatDate(start), yesterdayLocal());
   }
   return [yesterdayLocal()];
-}
-
-function todayLocal(): string {
-  return formatDate(new Date());
 }
 
 function yesterdayLocal(): string {

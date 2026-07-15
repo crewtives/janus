@@ -52,6 +52,26 @@ CI runs the same three on `ubuntu-latest` and `macos-latest`. If you can only ru
 
 ## Conventions
 
+### Privacy — this repo is public
+
+`github.com/crewtives/janus` is public, and Janus is a tool *about* private work: the bugs you fix
+are found in real vaults, so the evidence you reason from is private by construction. Everything
+that lands here — code, tests, comments, commit messages, PR bodies, docs — is published.
+
+Keep the user's own projects out of it: no project or product names, no client or teammate names,
+no vault paths that reveal them, no internal identifiers. This holds even when the incident you
+are fixing came from one of those projects, and even when naming it would make the commit message
+more vivid.
+
+- **Test fixtures use neutral names.** `alpha`, `beta`, `gamma`, `acme-*`. Never a real project.
+- **Describe the shape, not the subject.** "a pulse was discarded because the model prefixed it
+  with a paragraph" says everything the named version says, minus the leak. Dates, error strings
+  and line numbers identify nothing — keep those, they are what makes a message useful.
+- **Grep before you push**, not after. Once it is on GitHub, a history rewrite does not unpublish.
+
+The org (`crewtives`) and this project's own id (`crewtives-janus`) are already public and are
+fine. It is the *other* projects that are not.
+
 ### Commit messages
 
 [Conventional Commits](https://www.conventionalcommits.org). Scope is one of: `pulse`, `rollup`, `monthly`, `quarterly`, `yearly`, `spine`, `wrapped`, `mcp`, `init`, `discover`, `doctor`, `runners`, `prompts`, `pipeline`, `core`, `tests`, `ci`, `docs`, `chore`, `i18n`, `distribution`.

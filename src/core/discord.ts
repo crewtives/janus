@@ -28,7 +28,7 @@ export async function notifyDiscord(
   // Header content
   const dateRange =
     dates.length === 1 ? dates[0] : `${dates[0]}…${dates[dates.length - 1]} (${dates.length} days)`;
-  const headerContent = `🌙 **Daily Pulse — ${dateRange}**\n${byProject.length} projects analyzed`;
+  const headerContent = `🌙 **Daily Pulse — ${dateRange}**\n${renderTally(byProject)}`;
 
   const batches: typeof embeds[] = [];
   for (let i = 0; i < embeds.length; i += 10) {
@@ -41,16 +41,44 @@ export async function notifyDiscord(
       content: i === 0 ? headerContent : undefined,
       embeds: batches[i],
     };
-    const res = await fetch(config.webhookUrl, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      console.error(`[discord] webhook responded ${res.status}: ${text.slice(0, 200)}`);
+    try {
+      const res = await fetch(config.webhookUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        console.error(`[discord] webhook responded ${res.status}: ${text.slice(0, 200)}`);
+      }
+    } catch (err) {
+      // fetch rejects instead of returning a response when the request never
+      // completes (DNS, connection refused, TLS). The notification is the last
+      // step of a pulse run that already wrote its output — an unreachable
+      // webhook must not turn a successful run into a failed one.
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`[discord] webhook request failed: ${message}`);
     }
   }
+}
+
+/**
+ * Header tally. Counts only what actually succeeded: reporting every project as
+ * "analyzed" made a failed run look identical to a clean one, and the failure
+ * that lost a pulse went unnoticed for a day. Failures are named here because
+ * the header is the part that is read at a glance.
+ */
+function renderTally(byProject: ProjectResult[]): string {
+  const ok = byProject.filter((r) => r.status === "ok").length;
+  const dryRun = byProject.filter((r) => r.status === "dry-run").length;
+  const failed = byProject.filter((r) => r.status === "failed");
+
+  const parts = [`${ok} projects analyzed`];
+  if (dryRun > 0) parts.push(`${dryRun} dry-run`);
+  if (failed.length > 0) {
+    parts.push(`${failed.length} failed: ${truncate(failed.map((r) => r.project).join(", "), 200)}`);
+  }
+  return parts.join(" · ");
 }
 
 function consolidateByProject(results: ProjectResult[]): ProjectResult[] {

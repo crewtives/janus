@@ -244,6 +244,19 @@ export class Checkpoint {
     return rows.map(mapRow);
   }
 
+  /**
+   * Most recent date with status = 'done' for a project, or null if it never
+   * produced one. Anchors the catch-up window in the orchestrator: dates after
+   * this one and before today have no pulse and were never recovered, because
+   * launchd does not re-run what it missed.
+   */
+  lastDoneDate(project: string): string | null {
+    const row = this.db
+      .query(`SELECT MAX(date) AS d FROM pulse_state WHERE project = ?1 AND status = 'done'`)
+      .get(project) as { d: string | null } | null;
+    return row?.d ?? null;
+  }
+
   saveBaseline(opts: { project: string; date: string; generatedContent: string }): void {
     const now = new Date().toISOString();
     this.db

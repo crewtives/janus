@@ -195,10 +195,18 @@ if (process.env.JANUS_SKIP_BINARY_SMOKE !== "1") {
     const binaryPath = join(tmpRoot, "janus-smoke");
     const repoRoot = join(import.meta.dir, "..");
 
-    // Initialize a minimal git repo so `git log` returns cleanly.
+    // Initialize a minimal git repo so `git log` returns cleanly. The commit is not optional: on a
+    // repo with no commits HEAD resolves to nothing, `getBranch()` exits 128 and the project fails
+    // before the binary ever renders a prompt — which is what this check exists to exercise.
     const initGit = Bun.spawn(["git", "init", "-q", "-b", "main"], { cwd: projRepo, stdout: "pipe", stderr: "pipe" });
     await initGit.exited;
     if (initGit.exitCode !== 0) throw new Error("git init failed");
+    const seedCommit = Bun.spawn(
+      ["git", "-c", "user.email=smoke@janus.test", "-c", "user.name=smoke", "commit", "-q", "--allow-empty", "-m", "seed"],
+      { cwd: projRepo, stdout: "pipe", stderr: "pipe" },
+    );
+    await seedCommit.exited;
+    if (seedCommit.exitCode !== 0) throw new Error("git seed commit failed");
 
     // Compile the binary.
     const build = Bun.spawn(

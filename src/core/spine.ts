@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { Eta } from "eta";
 import type { JanusConfig, ProjectConfig } from "../config/types.ts";
 import { resolveRunner } from "../runners/registry.ts";
+import type { LLMRunner } from "../runners/types.ts";
 import { stripCodeFenceWrap } from "./daily.ts";
 import { readStrategy } from "./obsidian.ts";
 import { detectStrategyStatus } from "./strategy-status.ts";
@@ -16,6 +17,13 @@ import projectSpineTemplate from "../prompts/project-spine.v4.md" with { type: "
 export const SPINE_PROMPT_VERSION = "v4" as const;
 const SPINE_RECENT_WEEKLIES = 3;
 const SPINE_RECENT_PULSES_DAYS = 14;
+/**
+ * Floor for the post-frontmatter body. A spine is ~600 words; even the most
+ * minimal legitimate one (state callout + navigation) clears this comfortably.
+ * It only has to catch truncated or errored generations, so it is set low —
+ * rejecting a real spine silently freezes the project's memory too.
+ */
+const SPINE_MIN_BODY_CHARS = 200;
 
 const eta = new Eta({ autoEscape: false, rmWhitespace: false });
 
@@ -53,6 +61,7 @@ export async function writeProjectSpine(opts: {
   config: JanusConfig;
   /** Reference date for "today". Default: today. */
   today?: string;
+  runnerOverride?: LLMRunner;
 }): Promise<SpineWriteResult | null> {
   const today = opts.today ?? new Date().toISOString().slice(0, 10);
   const spinePath = join(opts.project.obsidianPath, `${opts.project.name}-spine.md`);
@@ -94,7 +103,8 @@ export async function writeProjectSpine(opts: {
   });
   if (typeof prompt !== "string") throw new Error("spine template render fail");
 
-  const result = await resolveRunner(opts.config).run({
+  const runner = opts.runnerOverride ?? resolveRunner(opts.config);
+  const result = await runner.run({
     prompt,
     cwd: opts.vaultPath,
     model: opts.config.model!,
@@ -106,8 +116,10 @@ export async function writeProjectSpine(opts: {
     logTag: `spine/${opts.project.name}`,
   });
 
-  await mkdir(dirname(spinePath), { recursive: true });
   const spineMd = stripCodeFenceWrap(result.resultText.trim());
+  assertValidSpine(spineMd, opts.project.name);
+
+  await mkdir(dirname(spinePath), { recursive: true });
   await Bun.write(spinePath, spineMd);
 
   // Index the spine in FTS5 (best-effort, non-fatal).
@@ -143,6 +155,30 @@ export async function writeProjectSpine(opts: {
     tracksIncluded: activeTracks.length,
     adrsIncluded: projectAdrs.length,
   };
+}
+
+/**
+ * Throws unless `md` looks like a real spine. Refusing to write leaves the
+ * previous spine untouched, which is the only recoverable outcome: the vault is
+ * not a git repo, there is no backup, and the spine is fed back as
+ * `previousSpine` on the next run — so a bad write both destroys the memory and
+ * poisons every generation after it. This runs unattended from launchd, where
+ * nobody is watching the runner's stderr.
+ */
+function assertValidSpine(md: string, project: string): void {
+  const reject = (why: string): never => {
+    throw new Error(`refusing to overwrite spine for ${project}: ${why}`);
+  };
+  if (md.length === 0) reject("runner returned empty text");
+  if (!md.startsWith("---\n") && !md.startsWith("---\r\n")) {
+    reject(`does not start with frontmatter (starts with: ${JSON.stringify(md.slice(0, 60))})`);
+  }
+  const fm = md.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n/);
+  if (!fm) reject("frontmatter does not close (missing second '---')");
+  const body = md.slice(fm![0].length).trim();
+  if (body.length < SPINE_MIN_BODY_CHARS) {
+    reject(`body is only ${body.length} chars (min ${SPINE_MIN_BODY_CHARS})`);
+  }
 }
 
 async function collectRecentWeeklies(vaultPath: string, limit: number): Promise<WeeklyForSpine[]> {

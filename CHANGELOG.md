@@ -4,6 +4,70 @@ All notable changes to Janus are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-07-15
+
+A pulse was generated complete and well-formed, and thrown away because the model prefixed it with a
+paragraph of preamble. The retry resent the same prompt — trigger included — and lost the day again.
+Nothing retried it afterwards, the daily rollup then asserted zero commits for a day that had 34, and
+nobody found out for 24 hours. Auditing that incident turned up a chain of places where the pipeline
+drops signal or asserts something false without marking it.
+
+### Added
+- **A failed or missing pulse is retried on the next run.** `Checkpoint.queryFailed()` had existed
+  since Phase 1 without a single caller: a date that failed was never revisited, because the cron
+  asks only for `[yesterday]` and launchd does not catch up missed runs. `runPulse` now folds failed
+  dates and gaps back into its date list, clamped to a window so it can never degenerate into an
+  accidental months-long backfill. Monthly and weekly already had this backstop — the pulse, the base
+  unit of memory, was the only one without it.
+- **`doctor` checks what actually breaks.** Dead-letter entries, per-project pulse gaps against
+  yesterday, and (on macOS) whether the scheduler is loaded in launchd. It reported 17/17 OK
+  throughout the incident, with the failed row live in `state.db` and the pulse absent from the vault.
+
+### Changed
+- **A salvageable preamble is stripped instead of discarding the report.** `validatePulse` cuts
+  whatever precedes the frontmatter and downgrades it to a warning. Deliberately conservative: it
+  strips only when what remains opens *and* closes a frontmatter block, and refuses when the preamble
+  opens a code fence — the closing fence would outlive the cut and turn a reported error into silent
+  corruption in the vault.
+- **`--since` no longer includes today.** It closed its range on `todayLocal()` while the other two
+  branches closed on `yesterdayLocal()`, so it wrote a half-day pulse and marked it `done`: the next
+  cron skipped the date and the day stayed archived truncated, indistinguishable from a complete one.
+- **`janus pulse` exits non-zero when a project fails.** Via `process.exitCode`, so the enrich and
+  self-heal passes still run to completion.
+- **`git log` walks `--branches`, not whatever HEAD pointed at.** What a pulse saw depended on which
+  branch happened to be checked out when the cron fired. Merge commits preserve committer dates, so
+  work committed on a branch and merged the next day landed in an already-processed window and no
+  pulse ever reported it. Narrower than `--all` on purpose: no `refs/remotes` (bot-pushed dependency
+  PR branches) and no `refs/stash`.
+- **`daily-rollup` prompt v7.** Receives the failing projects and is forbidden from asserting
+  cross-project totals when any are missing. v6 asserted the opposite to the model — "Today has N
+  pulses (one per project)" — and is kept in-tree per the prompt-versioning convention.
+
+### Fixed
+- **The daily consolidated no longer asserts false totals over a gap.** The failure data reached
+  `writeDailyConsolidated` and was dropped on the floor; `failed_projects` and `expected_projects`
+  now land in the frontmatter through both the LLM and the fallback path.
+- **`janus ask` had never indexed a single daily, weekly, monthly, quarterly or yearly.** `scanVault`
+  read `<vault>/Daily` while every writer writes to `<vault>/Timeline/`. Each block sat behind an
+  `existsSync` that returned false and moved on without a warning: zero docs against 73 files on
+  disk, with `--kind daily` advertised in the CLI and unable to return anything.
+- **The index reconciles deletions.** It only ever upserted, and since the docId is the vault-relative
+  path, archiving a pulse orphaned the old row: 374 dangling citations out of 884 docs, breaking the
+  documented `ask` → `Read <doc_id>` recipe. `SearchIndex.remove()` existed with no callers.
+  Reconciliation only deletes within the scanned scope.
+- **The spine is validated before it overwrites itself.** It was written from the runner's raw
+  `resultText` with no guard, while the pulse has validation plus a retry. A runner can return exit 0
+  with empty text — `is_error` was only logged. The spine is its own only memory, the vault is not a
+  git repo, there is no backup, and this runs unattended inside the weekly self-heal.
+- **`janus retry` stopped being a trap.** It reprocessed every dead-letter line without checking
+  `isDone`, overwriting good pulses and resetting the feedback-loop baselines, and never rebuilt the
+  daily. It is what README, ARCHITECTURE, FAQ and HANDOFF all recommended for recovery.
+- **A failure is visible in Discord.** The header counted failures as analysed — "8 projects analysed"
+  with 7 ok and 1 failed — under a template identical to the previous fifty notifications.
+- **The compiled-binary smoke test verifies something.** Its synthetic repo had no commits, so
+  `getBranch()` exited 128 and the project failed before a prompt was ever rendered — which is what
+  the check exists to exercise. It passed anyway, because the exit code was 0.
+
 ## [0.3.2] — 2026-07-10
 
 ### Fixed
@@ -170,7 +234,8 @@ Initial public-ish release (private repo) covering the foundations:
 - `doctor` command with provider-aware diagnostics.
 - 268 passing tests at end of Phase 1.
 
-[Unreleased]: https://github.com/crewtives/janus/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/crewtives/janus/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/crewtives/janus/releases/tag/v0.4.0
 [0.2.2]: https://github.com/crewtives/janus/releases/tag/v0.2.2
 [0.2.1]: https://github.com/crewtives/janus/releases/tag/v0.2.1
 [0.2.0]: https://github.com/crewtives/janus/releases/tag/v0.2.0

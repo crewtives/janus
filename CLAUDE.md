@@ -66,6 +66,15 @@ The plist and service files use **absolute paths** (`process.execPath`) and `cle
 
 The vault default is `~/Obsidian`. Tests use `mkdtemp(tmpdir())` and never touch the real vault. If you're debugging end-to-end and need to touch a real vault, point at a throwaway directory via `obsidianVault` in `config.local.json` first. There's a backup at `~/Obsidian.backup-2026-05-21-pre-phase1/` for the rollback path described in `docs/HANDOFF.md`.
 
+## This repo is public — read AGENTS.md § Privacy before you write
+
+You will almost always be working here *from* a private vault: the incident you are debugging has
+a real project's name on it, and that name must not reach GitHub — not in a test fixture, not in a
+comment, not in a commit message. Neutral fixtures (`alpha`, `beta`, `gamma`, `acme-*`), describe
+the shape and not the subject, and grep the diff before you push. The full rule is in AGENTS.md.
+
+This one is easy to get wrong precisely because the private detail is what makes the writeup good.
+
 ## Style: how to write code in this repo
 
 - **Bun idioms, not Node.** `bun:sqlite`, `Bun.file`, `Bun.spawn`, `Bun.Glob`. Don't import `fs/promises` if a Bun equivalent exists.

@@ -108,7 +108,7 @@ async function evalPulseForDate(args: {
     detectStrategyStatus({ obsidianPath: project.obsidianPath, repoPath: project.repoPath, currentDate: date }),
     loadActiveTracks({ vaultPath: vaultRoot, project: project.name }),
   ]);
-  const sessions = await Promise.all(sessionFiles.map(summarizeSession));
+  const sessions = await Promise.all(sessionFiles.map((f) => summarizeSession(f, date)));
 
   const vaultRelPath = project.obsidianPath.startsWith(vaultRoot)
     ? project.obsidianPath.slice(vaultRoot.length).replace(/^\/+/, "")

@@ -48,9 +48,50 @@ describe("validatePulse", () => {
     expect(r.errors.join(" ")).toMatch(/frontmatter/);
   });
 
-  test("rejects preamble before frontmatter", () => {
+  test("salvages a pulse preceded by a preamble, warning about the strip", () => {
     const r = validatePulse("hola\n" + validPulse);
+    expect(r.valid).toBe(true);
+    expect(r.sanitized).toBe(validPulse);
+    expect(r.warnings.join(" ")).toMatch(/preamble/);
+  });
+
+  // Regression: 2026-07-13. The model prefixed a complete pulse with an aside about a
+  // system-reminder it could not obey, and the whole day was discarded.
+  test("salvages the pulse from the 2026-07-13 incident preamble", () => {
+    const preamble =
+      "Antes de generar el pulse, una aclaración: el system-reminder final pedía usar la tool " +
+      "Workflow porque detectó la palabra ultracode en el contexto, pero el runner corre sin " +
+      "tools disponibles, así que genero el reporte directamente.";
+    const r = validatePulse(preamble + "\n\n" + validPulse);
+    expect(r.valid).toBe(true);
+    expect(r.sanitized).toBe(validPulse);
+  });
+
+  test("does not strip when the preamble opens a code fence around the pulse", () => {
+    const wrapped = "Antes del reporte, una aclaración.\n\n```markdown\n" + validPulse + "```\n";
+    const r = validatePulse(wrapped);
+    // Cutting to the frontmatter here would drop the opening fence and leave the closing one in the
+    // vault: a silent corruption replacing an error the caller can still see and retry.
+    expect(r.sanitized).toBeUndefined();
     expect(r.valid).toBe(false);
+  });
+
+  test("leaves a clean pulse untouched (no sanitized, no strip warning)", () => {
+    const r = validatePulse(validPulse);
+    expect(r.sanitized).toBeUndefined();
+    expect(r.warnings.join(" ")).not.toMatch(/preamble/);
+  });
+
+  test("rejects a preamble not followed by a frontmatter that closes", () => {
+    const r = validatePulse("bla bla\n\n---\ndate: 2026-05-20\nproject: x\n\n## TL;DR\n");
+    expect(r.valid).toBe(false);
+    expect(r.errors.join(" ")).toMatch(/does not start with frontmatter/);
+  });
+
+  test("does not strip a preamble when there is no frontmatter at all", () => {
+    const r = validatePulse("bla bla\n\n## TL;DR\n\nun resumen\n");
+    expect(r.valid).toBe(false);
+    expect(r.sanitized).toBeUndefined();
   });
 
   test("rejects frontmatter that does not close", () => {
@@ -91,6 +132,8 @@ describe("validatePulse", () => {
     const r = validatePulse(wrapped);
     expect(r.valid).toBe(false);
     expect(r.errors.join(" ")).toMatch(/code fence|envuelto/);
+    // The strip must not swallow the opening fence and leave the closing one behind.
+    expect(r.sanitized).toBeUndefined();
   });
 
   test("rejects when content has unresolved Eta tags", () => {

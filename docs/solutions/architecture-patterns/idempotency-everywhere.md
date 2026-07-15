@@ -80,7 +80,18 @@ The `skipped` counter tells you how many already existed. A fresh vault: 7 creat
 
 ### Failures don't poison idempotency
 
-Failed runs go to `.janus/failed.jsonl` plus `pulse_state.status = "failed"` (not `"done"`). Next run picks them up because `isDone()` only returns true for `status = "done"`. `bun janus retry --from .janus/failed.jsonl` is the manual replay path.
+Failed runs go to `.janus/failed.jsonl` plus `pulse_state.status = "failed"` (not `"done"`). `isDone()` only returns true for `status = "done"`, so a failed date is never mistaken for a finished one.
+
+But not being marked done is not the same as being retried. `determineDates()` on the cron path returns `[yesterday]` and launchd does not re-run what it missed — so for a long time a failed date simply never re-entered `dates`, and the pulse was lost for good. `isDone()` returning false is necessary, not sufficient: **something has to ask for the date again.**
+
+That is `computeCatchUpDates()` in `src/pipeline/orchestrator.ts`. On the bare cron path only (an explicit `--date`/`--since`/`--backfill` is honoured literally), it unions into `dates`:
+
+1. checkpoint rows with `status = "failed"`, via `cp.queryFailed()`
+2. the gap between each project's `cp.lastDoneDate()` and yesterday — days no run ever claimed
+
+Both clamped to `CATCH_UP_WINDOW_DAYS` (7). The clamp is the point: an unbounded catch-up turns a wiped `state.db` or a long holiday into an accidental multi-month backfill, at one LLM call per project per day. A project with no done pulse at all is skipped — that is a project that never started, not a gap to recover. Same shape as the monthly and weekly self-heal backstops in the same function.
+
+`bun janus retry --from .janus/failed.jsonl` is the manual replay path, and it is **not** a blind replay: the dead-letter is append-only, so it accumulates duplicates and entries a later run already repaired. `planRetry()` dedupes by `(project, date)`, skips anything already done (unless `--force`) and skips archived projects — replaying a done date would overwrite a good pulse (`writePulse` has no backup) and reset its feedback-loop baseline. After the run the dead-letter is rewritten with only what still fails, and the daily for every repaired date is regenerated, because the daily is written once when a date completes and nothing else revisits it.
 
 ## Why This Matters
 - Operational safety: any agent (human or scheduled) can re-run any command without losing data or producing duplicates

@@ -56,17 +56,44 @@ export function sessionsDir(repoPath: string): string {
   return join(PROJECTS_ROOT, pathToSlug(repoPath));
 }
 
+/** True if any message in the session carries a timestamp inside [start, end]. */
+export async function sessionTouchesRange(jsonlPath: string, start: Date, end: Date): Promise<boolean> {
+  const text = await Bun.file(jsonlPath).text();
+  const startMs = start.getTime();
+  const endMs = end.getTime();
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    let ts: unknown;
+    try {
+      ts = (JSON.parse(trimmed) as SessionMessage).timestamp;
+    } catch {
+      continue;
+    }
+    if (typeof ts !== "string") continue;
+    const t = new Date(ts).getTime();
+    if (!Number.isNaN(t) && t >= startMs && t <= endMs) return true;
+  }
+  return false;
+}
+
 /**
- * Lists project .jsonl files whose mtime falls inside the range.
- * `date` is the target date in YYYY-MM-DD (local zone). Filters by file
- * mtime (the date the session was last updated).
+ * Lists project .jsonl files with at least one message inside the range.
+ *
+ * mtime is a prefilter, never the answer: a session is only appended to, so no
+ * message can postdate its mtime and `mtime < start` is a sound cheap reject.
+ * The converse is false — mtime says nothing about when the work *started*, and
+ * sessions here routinely open at 02:00 and cross midnight, so every survivor is
+ * read. Selecting by mtime alone filed a session's whole history under the day it
+ * happened to end (2026-07-13: 821 messages from three days rendered as one).
+ *
+ * There is no cheap upper bound: timestamps are not monotonic within a file, and
+ * compaction rewrites birthtime, so neither the first line nor birthtime bounds
+ * the earliest message.
  */
-export async function findSessionsForDate(repoPath: string, date: string): Promise<string[]> {
+async function findSessionsInRange(repoPath: string, start: Date, end: Date): Promise<string[]> {
   const dir = sessionsDir(repoPath);
   if (!existsSync(dir)) return [];
-
-  const dayStart = new Date(`${date}T00:00:00`);
-  const dayEnd = new Date(`${date}T23:59:59.999`);
 
   const entries = await readdir(dir);
   const matches: string[] = [];
@@ -75,7 +102,8 @@ export async function findSessionsForDate(repoPath: string, date: string): Promi
     const full = join(dir, name);
     try {
       const st = await stat(full);
-      if (st.mtime >= dayStart && st.mtime <= dayEnd) matches.push(full);
+      if (st.mtime < start) continue;
+      if (await sessionTouchesRange(full, start, end)) matches.push(full);
     } catch {
       // file moved/deleted between readdir and stat → ignore
     }
@@ -83,28 +111,14 @@ export async function findSessionsForDate(repoPath: string, date: string): Promi
   return matches;
 }
 
-/**
- * Lists sessions whose mtime falls on any date between `sinceDate` and `untilDate` (inclusive).
- * Useful for backfill.
- */
+/** `date` is the target date in YYYY-MM-DD (local zone). */
+export async function findSessionsForDate(repoPath: string, date: string): Promise<string[]> {
+  return findSessionsInRange(repoPath, new Date(`${date}T00:00:00`), new Date(`${date}T23:59:59.999`));
+}
+
+/** Sessions with any message between `sinceDate` and `untilDate` (inclusive). Useful for backfill. */
 export async function findSessionsBetween(repoPath: string, sinceDate: string, untilDate: string): Promise<string[]> {
-  const dir = sessionsDir(repoPath);
-  if (!existsSync(dir)) return [];
-  const start = new Date(`${sinceDate}T00:00:00`);
-  const end = new Date(`${untilDate}T23:59:59.999`);
-  const entries = await readdir(dir);
-  const matches: string[] = [];
-  for (const name of entries) {
-    if (!name.endsWith(".jsonl")) continue;
-    const full = join(dir, name);
-    try {
-      const st = await stat(full);
-      if (st.mtime >= start && st.mtime <= end) matches.push(full);
-    } catch {
-      // noop
-    }
-  }
-  return matches;
+  return findSessionsInRange(repoPath, new Date(`${sinceDate}T00:00:00`), new Date(`${untilDate}T23:59:59.999`));
 }
 
 function extractText(content: unknown): string {
@@ -148,8 +162,13 @@ function pushSnippet(text: string, maxLen: number, target: string[], maxCount: n
  * Parses a .jsonl file and produces a lightweight summary.
  * Does not reconstruct the full conversation — only counters and signals,
  * plus text selected by heuristic (userIntent, decisionSnippets, blockerSnippets).
+ *
+ * Without `date` the whole transcript is summarized (callers that want the session's
+ * own shape, e.g. Wrapped's average length). With one, every field below is scoped to
+ * that day — a session spanning 07-11..07-13 otherwise reports its 07-11 decisions as
+ * activity of the 13th, and the snippet caps fill up before the target day is reached.
  */
-export async function summarizeSession(jsonlPath: string): Promise<SessionSummary> {
+export async function summarizeSession(jsonlPath: string, date?: string): Promise<SessionSummary> {
   const file = Bun.file(jsonlPath);
   const text = await file.text();
 
@@ -178,6 +197,9 @@ export async function summarizeSession(jsonlPath: string): Promise<SessionSummar
     blockerSnippets: [],
   };
 
+  const dayStartMs = date ? new Date(`${date}T00:00:00`).getTime() : null;
+  const dayEndMs = date ? new Date(`${date}T23:59:59.999`).getTime() : null;
+
   const filesSet = new Set<string>();
   for (const line of text.split("\n")) {
     const trimmed = line.trim();
@@ -187,6 +209,12 @@ export async function summarizeSession(jsonlPath: string): Promise<SessionSummar
       msg = JSON.parse(trimmed) as SessionMessage;
     } catch {
       continue;
+    }
+
+    if (dayStartMs !== null && dayEndMs !== null) {
+      // An untimestamped line is unattributable, so it is dropped when scoping to a day.
+      const t = msg.timestamp ? new Date(msg.timestamp).getTime() : Number.NaN;
+      if (Number.isNaN(t) || t < dayStartMs || t > dayEndMs) continue;
     }
 
     if (msg.timestamp) {
@@ -205,9 +233,12 @@ export async function summarizeSession(jsonlPath: string): Promise<SessionSummar
         if (!summary.userIntent) {
           const txt = normalizeWhitespace(extractText(inner?.content));
           // Exclude tool_result or local-command messages. The intent is the first real user message.
+          // Slash-command scaffolding (<command-name>/effort</command-name>…) is not intent either,
+          // and it dragged its arguments into the pulse prompt until 2026-07-13.
           if (
             txt.length >= USER_INTENT_MIN_LEN &&
             !txt.startsWith("<local-command") &&
+            !txt.startsWith("<command-") &&
             !txt.startsWith("[Request interrupted")
           ) {
             summary.userIntent = txt.length > USER_INTENT_MAX_LEN ? txt.slice(0, USER_INTENT_MAX_LEN).trimEnd() + "…" : txt;

@@ -8,7 +8,7 @@ import { resolveRunner } from "../runners/registry.ts";
 import { RunnerError } from "../runners/types.ts";
 import { getActivity } from "../core/git.ts";
 import { writePulse, readIfExists, roadmapPath, claudeMdPath, readStrategy, readRepoReadme } from "../core/obsidian.ts";
-import { findSessionsForDate, summarizeSession } from "../core/sessions.ts";
+import { findSessionTranscriptsForDate, summarizeTranscript } from "../ingest/index.ts";
 import { loadPreviousPulses } from "../core/previous-pulses.ts";
 import { detectStrategyStatus } from "../core/strategy-status.ts";
 import { loadUserEdits } from "../core/user-edits.ts";
@@ -418,7 +418,7 @@ async function processProject(args: {
     readIfExists(claudeMdPath(project.repoPath)),
     readStrategy(project.obsidianPath, project.repoPath),
     readRepoReadme(project.repoPath),
-    findSessionsForDate(project.repoPath, date),
+    findSessionTranscriptsForDate({ project, projects: config.projects, date }),
     loadPreviousPulses({ obsidianPath: project.obsidianPath, currentDate: date, daysBack: 7 }),
     detectStrategyStatus({ obsidianPath: project.obsidianPath, repoPath: project.repoPath, currentDate: date }),
     loadUserEdits({ checkpoint: cp, project: project.name, obsidianPath: project.obsidianPath, currentDate: date }),
@@ -427,7 +427,7 @@ async function processProject(args: {
     detectProjectAnniversary({ project, checkpoint: cp, today: date }).catch(() => null),
     loadDayLastYearAnchor({ obsidianPath: project.obsidianPath, project: project.name, today: date }).catch(() => null),
   ]);
-  const sessions = await Promise.all(sessionFiles.map((f) => summarizeSession(f, date)));
+  const sessions = await Promise.all(sessionFiles.map((session) => summarizeTranscript(session, date)));
   if (anniversary) {
     console.log(`${tag} anniversary detected: ${anniversary.years} year(s) since ${anniversary.sinceDate} (${anniversary.source})`);
     // Phase 3 U4 — auto-trigger per-project Wrapped.

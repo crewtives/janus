@@ -27,6 +27,7 @@ const main = defineCommand({
     init: () => import("../src/commands/init.ts").then((m) => m.default),
     retry: () => import("../src/commands/retry.ts").then((m) => m.default),
     mcp: () => import("../src/commands/mcp.ts").then((m) => m.default),
+    context: () => import("../src/commands/context.ts").then((m) => m.default),
     note: () => import("../src/commands/note.ts").then((m) => m.default),
     wrapped: () => import("../src/commands/wrapped.ts").then((m) => m.default),
     demo: () => import("../src/commands/demo.ts").then((m) => m.default),

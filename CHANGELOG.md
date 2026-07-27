@@ -4,6 +4,11 @@ All notable changes to Janus are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+### Added
+- **Codex CLI is now a first-class Janus provider and memory source.** `janus init` can register
+  an MCP server plus a scope-aware SessionStart hook, pulses ingest canonical Codex session events,
+  and the isolated Codex runner generates reports without persisting its own Janus sessions.
+
 ## [0.4.0] — 2026-07-15
 
 A pulse was generated complete and well-formed, and thrown away because the model prefixed it with a

@@ -27,7 +27,33 @@ Add to your `~/.claude/config.json` (or the MCP client's equivalent):
 
 After restarting Claude Code, the `janus_ask`, `janus_get_spine`, `janus_get_pulse`, `janus_list_projects` tools are available.
 
+## Connect it from Codex CLI
+
+Run `janus init` and accept **Install Janus automatic memory + MCP for Codex CLI**. Janus:
+
+1. registers the `janus` MCP server with the exact config path selected by the wizard; and
+2. adds an idempotent `SessionStart` hook in `$CODEX_HOME/hooks.json`.
+
+On first use, Codex may ask you to trust the new hook. When a session starts inside a configured
+`repoPath`, the hook resolves the most-specific tracked project and injects its spine. Outside all
+tracked repositories it writes no stdout and adds no context. The MCP remains available for deeper
+searches or as a manual fallback:
+
+```text
+Call janus_get_project_context with the current working directory, then use
+janus_ask if the spine does not answer the question.
+```
+
+`janus doctor` checks that both the hook marker and the MCP registration exist. It cannot
+pre-approve Codex's trust prompt.
+
 ## Exposed tools
+
+### `janus_get_project_context(cwd)`
+
+Resolves a canonical working directory against configured repositories. It returns the project
+spine for a tracked repository, a recoverable `missing-spine` state, or only an `untracked`
+discriminator. It never guesses from a sibling path with a shared prefix.
 
 ### `janus_ask(query, project?, kind?, since?, until?, limit?)`
 

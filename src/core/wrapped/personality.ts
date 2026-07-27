@@ -16,7 +16,7 @@ import type { LLMRunner } from "../../runners/types.ts";
 import type { PersonalityArchetype, PersonalitySignals, WrappedData } from "./types.ts";
 import { Checkpoint } from "../checkpoint.ts";
 import { getActivity } from "../git.ts";
-import { findSessionsForDate, summarizeSession } from "../sessions.ts";
+import { findSessionTranscriptsForDate, summarizeTranscript } from "../../ingest/index.ts";
 import { existsSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import wrappedPersonalityTemplate from "../../prompts/wrapped-personality.v2.md" with { type: "text" };
@@ -220,9 +220,9 @@ export async function computeSignals(config: JanusConfig, data: WrappedData): Pr
     if (!existsSync(project.repoPath)) continue;
     for (const date of monthSamples) {
       try {
-        const files = await findSessionsForDate(project.repoPath, date);
+        const files = await findSessionTranscriptsForDate({ project, projects: config.projects, date });
         for (const f of files) {
-          const s = await summarizeSession(f);
+          const s = await summarizeTranscript(f);
           sessionsCount += 1;
           totalMsgs += s.messageCount;
         }

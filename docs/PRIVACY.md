@@ -1,6 +1,9 @@
 # Privacy and redaction
 
-Janus reads two streams of work — your git history and the JSONL transcripts of your Claude Code sessions — and feeds the cross-referenced material into an LLM. That LLM may be a third party (Anthropic, Google). The privacy layer makes sure no obvious secret or personal identifier leaves your machine inside that prompt.
+Janus reads two streams of work — your git history and the JSONL transcripts of your Claude Code
+and Codex CLI sessions — and feeds the cross-referenced material into an LLM. That LLM may be a
+third party (Anthropic, OpenAI, Google). The privacy layer makes sure no obvious secret or personal
+identifier leaves your machine inside that prompt.
 
 This document describes what gets redacted, how the layer is wired, how to extend or disable it, and what is explicitly out of scope.
 
@@ -11,13 +14,15 @@ The data flow is straightforward:
 ```
 git log + git diff --stat      ─┐
                                 ├──→  buildPromptContext()  ──→  rendered prompt  ──→  LLM
-~/.claude/projects/<...>.jsonl ─┘                                         ▲
+Claude/Codex session JSONL     ─┘                                         ▲
                                                                           │
                                                               redactingRunner (chokepoint)
 ```
 
 - `src/core/git.ts` collects commit subjects, bodies, file paths, and diff stats.
-- `src/core/sessions.ts` extracts `userIntent`, `decisionSnippets`, `blockerSnippets`, `filesEdited`, `cwd`, and `gitBranch` from Claude Code session JSONL files.
+- `src/ingest/` normalizes Claude Code and Codex JSONL into the same summary fields:
+  `userIntent`, `decisionSnippets`, `blockerSnippets`, `filesEdited`, `cwd`, `gitBranch`, and
+  `source`. Codex subagent rollouts and developer-message duplicates are excluded.
 - `src/core/template.ts` assembles those into a `PulsePromptContext` and renders the Eta template.
 - `src/runners/redacting.ts` wraps the LLM runner. The rendered prompt is passed through `redact()` *immediately* before the provider receives it.
 
@@ -150,6 +155,11 @@ For a specific worry — say, "does Janus catch a fake GitHub PAT in my commit b
 - The contents of your Obsidian vault, which `spine.ts` and similar may read and feed back into the next pulse.
 - Steganographic encodings (the layer pattern-matches; it doesn't understand intent).
 - Phone numbers, postal addresses, or your full personal name.
+- Side effects from machine-managed or system-level MCP servers that Codex itself loads. The Janus
+  Codex runner disables ordinary hooks, plugins, apps, rules, user config, and project config; runs
+  in a neutral temporary directory with a read-only sandbox; and uses `--ephemeral`. Codex does not
+  currently expose a documented global “disable every MCP source” switch, so that residual layer is
+  outside Janus's guarantee.
 
 The layer is intentionally **regex-based and pure**: no entropy detection, no model-based scrubbing, no learned classifier. Those are deliberate v1 trade-offs.
 

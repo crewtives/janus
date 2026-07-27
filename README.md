@@ -10,7 +10,7 @@
 
 Other tools compile what you know. Janus records what you did.
 
-Janus reads your work (git + Claude Code sessions) and writes the narrative of each project across five tiers — daily → weekly → monthly → quarterly → yearly → spine — straight into your Obsidian vault. The vault becomes both a journal future-you can re-read and an MCP server other agents can query for context — not raw logs.
+Janus reads your work (git + Claude Code or Codex sessions) and writes the narrative of each project across five tiers — daily → weekly → monthly → quarterly → yearly → spine — straight into your Obsidian vault. The vault becomes both a journal future-you can re-read and an MCP server other agents can query for context — not raw logs.
 
 Built by **[Crewtives](https://crewtives.com)** · [Read the notes](https://crewtives.com/notes/)
 
@@ -61,11 +61,11 @@ Every night, Janus walks each of your tracked projects and writes:
 
 > [See a synthetic Wrapped sample →](docs/examples/wrapped-2026-sample.md) (three fake projects, no real user data)
 
-The system runs on the **Claude Code CLI** (or Gemini CLI as fallback) via headless invocation, so it uses your Claude Max subscription instead of burning API tokens. It exposes itself as an **MCP server** with 4 tools so other agents can query the synthesized narrative.
+The system runs on **Claude Code, Codex CLI, or Gemini CLI** via headless invocation. It exposes itself as an **MCP server** with 5 tools so other agents can query the synthesized narrative.
 
 ## Cost
 
-Janus is free if you already pay for **Claude Max**. The runner shells out to `claude -p` headless, which authenticates against your local OAuth session — no `ANTHROPIC_API_KEY` is consumed, no API tokens are billed. If `claude` isn't available, the optional `gemini-cli` fallback runs against your Google account on the same principle.
+Janus reuses the coding-agent subscription selected in `provider`: Claude Code, Codex CLI, or Gemini CLI. Each adapter authenticates through its local CLI session rather than Janus holding an API key. Provider pricing and usage limits still apply.
 
 The only command that incurs multiple LLM calls in a single run is `wrapped` (one yearly + per-project + personality). Use `--dry-run` while iterating on prompts; it skips the LLM and exercises only the deterministic aggregator + personality.
 
@@ -97,7 +97,7 @@ See [docs/FAQ.md](docs/FAQ.md) for the longer answer to most of the questions th
 - **p-queue** + **p-retry** with per-project serialization, cross-project concurrency
 - **Eta** templating for versioned prompts (single shared voice spec)
 - Cross-platform nightly scheduler — **launchd** (macOS), **systemd-user timer** (Linux + WSL)
-- **LLMRunner abstraction** with swappable adapters (`claude-code`, `gemini-cli`)
+- **LLMRunner abstraction** with swappable adapters (`claude-code`, `codex`, `gemini-cli`)
 - Vanilla JSON-RPC stdio MCP server, zero external dependencies
 
 ## Install
@@ -233,7 +233,7 @@ bun janus wrapped --year YYYY --dry-run      # data + personality only
 # Search + MCP
 bun janus index                              # bootstrap FTS5 index
 bun janus ask "<query>" [--project X] [--since YYYY-MM-DD] [--kind pulse|weekly|...]
-bun janus mcp                                # stdio MCP server: janus_ask, janus_get_spine, janus_get_pulse, janus_list_projects
+bun janus mcp                                # stdio MCP server, including project-context lookup
 
 # Portfolio notes
 bun janus note "<topic>" [--title "..."] [--project <name>] [--dry-run]
@@ -273,6 +273,12 @@ Per-project `status`:
 - `paused` — only generates a pulse if there's commit/session activity. Useful for side projects that sleep for weeks.
 - `archived` — total skip.
 
+To use Codex as the generation provider, set `"provider": "codex"` and omit Claude-specific
+`model` / `fallbackModel` values unless you replace them with valid Codex model names. Running
+`janus init` can also install the Codex SessionStart hook and MCP registration. The hook injects
+the project spine only when Codex starts inside a configured `repoPath`; outside those paths it
+is silent.
+
 ## What's in the vault after a run
 
 Janus generates idempotent artifacts in your Obsidian vault:
@@ -301,14 +307,15 @@ Janus generates idempotent artifacts in your Obsidian vault:
 
 ## MCP server
 
-The narrative isn't just for you to read. `bun janus mcp` launches a stdio JSON-RPC server exposing 4 tools any agent can call — so other Claude Code sessions, scripts, or coding agents can query your own history as structured context instead of asking you to re-explain it.
+The narrative isn't just for you to read. `bun janus mcp` launches a stdio JSON-RPC server exposing 5 tools any agent can call — so other coding-agent sessions and scripts can query your own history as structured context instead of asking you to re-explain it.
 
+- `janus_get_project_context(cwd)` — resolves whether the working directory is tracked and returns its spine when available.
 - `janus_ask(query, project?, since?, kind?)` — FTS5 search returning narrative excerpts.
 - `janus_get_spine(project)` — continuous per-project narrative.
 - `janus_get_pulse(project, date)` — specific pulse.
 - `janus_list_projects()` — projects with status + last pulse.
 
-Wire it into your `.mcp.json` so other Claude Code sessions can query Janus directly. See [docs/mcp.md](docs/mcp.md).
+Wire it into your MCP client, or let `janus init` register it for Codex. See [docs/mcp.md](docs/mcp.md).
 
 ## The /daily-pulse skill
 

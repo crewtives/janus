@@ -1,6 +1,8 @@
 # Janus architecture
 
-Janus is a **nightly agent** that distills your project activity into a continuous engineering narrative, persisted in your Obsidian vault. It runs on top of Claude Code in headless mode (`claude -p`) against your Claude Max subscription — no API tokens consumed.
+Janus is a **nightly agent** that distills your project activity into a continuous engineering
+narrative, persisted in your Obsidian vault. Its headless LLM provider can be Claude Code, Codex
+CLI, or Gemini CLI.
 
 ## Overview
 
@@ -34,10 +36,10 @@ flowchart TD
 
     subgraph proj
         git[Git log + diff<br/>src/core/git.ts]
-        sessions[Claude Code sessions<br/>~/.claude/projects/*.jsonl]
+        sessions[Claude Code + Codex sessions<br/>normalized by src/ingest/]
         ctx[STRATEGY.md<br/>_roadmap.md<br/>README.md<br/>CLAUDE.md<br/>previous pulses]
-        prompt["Eta render<br/>daily-pulse.v8.md"]
-        claude["claude -p headless<br/>src/core/claude.ts<br/>(strips ANTHROPIC_API_KEY)"]
+        prompt["Eta render<br/>versioned daily-pulse prompt"]
+        claude["LLMRunner<br/>Claude Code / Codex / Gemini"]
     end
 
     git --> prompt
@@ -155,16 +157,18 @@ All versioned prompts inject **`src/prompts/_voice.md`** as the single narrative
 - **Eta** — prompt templating (jinja-like over the `.md` files in `src/prompts/`)
 - **@clack/prompts** — interactive `janus init` wizard
 - **launchd** (macOS) — nightly scheduling
-- **LLMRunner abstraction** — swappable adapters (`claude-code`, `gemini-cli`)
+- **LLMRunner abstraction** — swappable adapters (`claude-code`, `codex`, `gemini-cli`)
 
 ## LLMRunner — provider abstraction
 
-Janus invokes coding-agent CLIs in headless mode through a neutral contract. This lets it work with Claude Code or Gemini CLI (and add adapters for Qwen Code, Codex, etc.) without locking the orchestrator to a specific vendor.
+Janus invokes coding-agent CLIs in headless mode through a neutral contract. This lets it work
+with Claude Code, Codex CLI, or Gemini CLI without locking the orchestrator to a specific vendor.
 
 ```
 src/runners/
 ├── types.ts            ← LLMRunner interface + RunnerCapabilities + RunOptions/Result
 ├── claude-code.ts      ← Claude Code adapter (stream-json, --tools "", strips ANTHROPIC_API_KEY)
+├── codex.ts            ← Codex adapter (JSONL, ephemeral, neutral cwd, read-only sandbox)
 ├── gemini.ts           ← Gemini CLI adapter (--output-format json single response)
 ├── registry.ts         ← resolveRunner(config) → factory by provider
 ├── with-fallback.ts    ← wrapper that retries with the secondary runner on retriable errors
@@ -186,14 +190,14 @@ src/runners/
 
 ```json
 {
-  "provider": "claude-code",          // primary
-  "fallbackProvider": "gemini-cli",   // optional, for failover
-  "model": "sonnet",
-  "fallbackModel": "opus"
+  "provider": "codex",
+  "fallbackProvider": "claude-code"
 }
 ```
 
-`doctor` reads `config.provider` + `config.fallbackProvider` and only checks the CLIs that will be used. If you only use Gemini, it doesn't verify `claude auth status`. If you have a fallback configured, it validates both.
+Top-level `model`, `effort`, and `fallbackModel` configure only the primary provider. A
+cross-provider fallback uses its CLI defaults, avoiding model-namespace leakage. `doctor` reads
+`config.provider` + `config.fallbackProvider` and checks only the CLIs that will be used.
 
 `resolveRunner(config)` returns the runner to use; the 7 call sites (orchestrator, aggregations, monthly, spine, daily, weekly) call `resolveRunner(config).run(opts)` instead of the historical `runClaude(opts)`.
 
@@ -204,16 +208,19 @@ src/runners/
 Janus is designed to run every night across multiple projects. Doing that with API tokens would be expensive and misaligned with the "personal agent" use case. We reuse subscriptions the user already pays for:
 
 - **Claude Code adapter**: `cleanEnv(env, ["ANTHROPIC_API_KEY"])` strips the API key from the subprocess env, forcing Max OAuth.
+- **Codex adapter**: runs `codex exec --json --ephemeral` in a neutral temporary directory with
+  user config, rules, hooks, plugins, and apps disabled and a read-only sandbox. There is no
+  documented Codex switch that disables every machine-managed/system MCP source, so Janus does not
+  claim isolation from that residual layer.
 - **Gemini CLI adapter**: if `~/.gemini/credentials.json` (OAuth login) is present, it uses that; alternative: `GEMINI_API_KEY`/`GOOGLE_API_KEY` for cases without a subscription.
 - It also gives us access to the **agent's tools** (file read/write, bash, web fetch, etc.) inside every pulse — the LLM doesn't just write, it can also read a specific file in the repo when the commit warrants it.
 
 ### Why coding-agent session transcripts (not just git)
 
-Git tells you **what was committed**. Claude Code sessions (`.jsonl` files in
-`~/.claude/projects/<slug>/`) tell you **what was decided, what blocked, what
-was tried and discarded**. The engineering narrative lives there.
+Git tells you **what was committed**. Claude Code and Codex session JSONL tell you **what was
+decided, what blocked, what was tried and discarded**. The engineering narrative lives there.
 
-`src/core/sessions.ts` extracts:
+`src/ingest/` normalizes both sources and extracts:
 - `userIntent` (first user message in the session)
 - `decisionSnippets` (regex heuristic over "decided", "chose",
   "implemented", "fixed", etc.)
@@ -283,8 +290,10 @@ The orchestrator persists these tables automatically: `track_lineage` from `week
 
 ### MCP server (Phase 1D)
 
-`src/mcp/server.ts` exposes Janus as an **MCP stdio server** consumable from Claude Code, Cursor, Codex in other sessions. Vanilla JSON-RPC 2.0 newline-delimited, no dependencies (~250 LOC). 4 typed tools:
+`src/mcp/server.ts` exposes Janus as an **MCP stdio server** consumable from Claude Code, Cursor,
+Codex, and other clients. Vanilla JSON-RPC 2.0 newline-delimited, no dependencies. 5 typed tools:
 
+- `janus_get_project_context(cwd)` — canonical scope resolution plus the current project spine.
 - `janus_ask(query, project?, since?, kind?, ...)` — FTS5 search with filters, results returned as narrative with back-links.
 - `janus_get_spine(project)` — returns the full project-spine.
 - `janus_get_pulse(project, date)` — specific pulse (searches in `pulse/` and `_archive/`).

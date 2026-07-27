@@ -6,11 +6,13 @@ Common questions before and after installing Janus. If yours isn't here, [open a
 
 ### Do I need a Claude Max subscription?
 
-For nightly pulses and Wrapped — yes, in practice. The default runner shells out to `claude -p` (headless Claude Code), which authenticates against your local OAuth Max session. No `ANTHROPIC_API_KEY` is consumed and no API tokens are billed.
+No. Claude Code remains the default, but Janus can generate with Codex CLI or Gemini CLI using the
+local authenticated CLI session.
 
 If you don't have Claude Max:
 
 - The optional fallback runner uses Google's `gemini-cli` on the same OAuth principle. Set `provider: "gemini-cli"` in `config.local.json`.
+- Codex CLI is a first-class provider. Set `provider: "codex"` and authenticate with `codex login`.
 - The MCP server (`janus mcp`) and search (`janus ask`) work on already-synthesized material without invoking any LLM, so you can query existing pulses without an active provider.
 - `janus pulse --dry-run` renders the prompt without invoking any provider, useful for prompt iteration.
 
@@ -40,7 +42,7 @@ If you'd rather avoid `xattr`, install from source instead (`bun install` from t
 
 ### What does the nightly run actually do?
 
-`launchd` (macOS) or a `systemd-user` timer (Linux) wakes Janus once a day. For each configured project it: reads new git commits since the last checkpoint, reads new Claude Code session transcripts, synthesizes a daily pulse, then rolls up cross-project material. Weekly / monthly / quarterly / yearly tiers are produced on their respective boundaries.
+`launchd` (macOS) or a `systemd-user` timer (Linux) wakes Janus once a day. For each configured project it: reads new git commits since the last checkpoint, reads new Claude Code and Codex session transcripts, synthesizes a daily pulse, then rolls up cross-project material. Weekly / monthly / quarterly / yearly tiers are produced on their respective boundaries.
 
 You can also run any tier on demand: `janus pulse`, `janus rollup --week`, `janus monthly --month YYYY-MM`, etc.
 
@@ -66,21 +68,31 @@ Yes. In `config.local.json`, set the project's `status`:
 - `"paused"` — only generates a pulse if there's commit/session activity that day. Useful for side projects that sleep for weeks; you don't get empty "nothing happened" notes.
 - `"archived"` — total skip. Existing pulses stay in the vault, no new ones are written.
 
-### How do I switch from claude-code to gemini-cli?
+### How do I switch providers?
 
 Edit `config.local.json`:
 
 ```json
-{ "provider": "gemini-cli", "fallbackProvider": "claude-code" }
+{ "provider": "codex", "fallbackProvider": "claude-code" }
 ```
 
-Or set `provider: "with-fallback"` to chain both — Janus tries the primary, falls back to the secondary on failure. `janus doctor` checks both providers and reports which are available.
+Use `gemini-cli` instead of `codex` if desired. Janus tries `provider` first and
+`fallbackProvider` on retriable failures. Top-level model settings belong to the primary provider;
+the secondary uses its own CLI defaults so a Claude model name cannot leak into Codex or Gemini.
+`janus doctor` checks every configured provider.
+
+### Why didn't Codex load Janus memory?
+
+Run `janus doctor`. The Codex integration must have both a SessionStart hook and a registered
+`janus` MCP server. Codex may also require one-time approval of the hook after `janus init`.
+Automatic context is intentionally silent outside configured `repoPath` values. Inside a tracked
+repository without a spine, use `janus_ask` through MCP or generate a pulse/spine first.
 
 ## Data and privacy
 
 ### What does Janus send to the LLM?
 
-Per pulse: a redacted, structured prompt containing the day's git commits (subjects + bodies + file paths) and Claude Code session excerpts for that project, plus prior pulses for context. See [`docs/PRIVACY.md`](PRIVACY.md) for the full redaction layer — Anthropic / OpenAI / GitHub / AWS keys, JWTs, webhook URLs, bearer tokens, private keys, emails, and home-directory paths are stripped before the prompt leaves your machine.
+Per pulse: a redacted, structured prompt containing the day's git commits (subjects + bodies + file paths) and Claude Code or Codex session excerpts for that project, plus prior pulses for context. See [`docs/PRIVACY.md`](PRIVACY.md) for the full redaction layer — Anthropic / OpenAI / GitHub / AWS keys, JWTs, webhook URLs, bearer tokens, private keys, emails, and home-directory paths are stripped before the prompt leaves your machine.
 
 The MCP server (`janus mcp`) reads from your already-synthesized vault and does not call any LLM itself — it returns existing material.
 

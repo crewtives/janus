@@ -2,9 +2,11 @@ import { resolve } from "node:path";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import type { JanusConfig } from "./types.ts";
-
-const VALID_PROVIDERS = ["claude-code", "gemini-cli"] as const;
-type ProviderId = (typeof VALID_PROVIDERS)[number];
+import {
+  defaultModelSettings,
+  PROVIDER_IDS,
+  type ProviderId,
+} from "./providers.ts";
 
 function configPaths(): string[] {
   return [
@@ -13,8 +15,8 @@ function configPaths(): string[] {
   ];
 }
 
-export async function loadConfig(): Promise<JanusConfig> {
-  const paths = configPaths();
+export async function loadConfig(explicitPath?: string): Promise<JanusConfig> {
+  const paths = explicitPath ? [resolve(explicitPath)] : configPaths();
   const path = paths.find((p) => existsSync(p));
   if (!path) {
     throw new Error(
@@ -29,6 +31,8 @@ function applyDefaults(raw: Partial<JanusConfig>): JanusConfig {
   if (!raw.obsidianVault) throw new Error("config: obsidianVault is required");
   if (!raw.projects?.length) throw new Error("config: projects[] is empty");
 
+  const provider = parseProvider(raw.provider, "claude-code");
+  const providerDefaults = defaultModelSettings(provider);
   return {
     obsidianVault: expandHome(raw.obsidianVault),
     projects: raw.projects.map((p) => ({
@@ -44,10 +48,10 @@ function applyDefaults(raw: Partial<JanusConfig>): JanusConfig {
     intervalMs: raw.intervalMs ?? 60_000,
     taskTimeoutMs: raw.taskTimeoutMs ?? 30 * 60_000,
     stateDir: expandHome(raw.stateDir ?? resolve(process.cwd(), ".janus")),
-    model: raw.model ?? "sonnet",
-    effort: raw.effort ?? "xhigh",
-    fallbackModel: raw.fallbackModel ?? "opus",
-    provider: parseProvider(raw.provider, "claude-code"),
+    model: raw.model ?? providerDefaults.model,
+    effort: raw.effort ?? providerDefaults.effort,
+    fallbackModel: raw.fallbackModel ?? providerDefaults.fallbackModel,
+    provider,
     fallbackProvider: parseProvider(raw.fallbackProvider, undefined),
     privacy: {
       enabled: raw.privacy?.enabled ?? true,
@@ -56,6 +60,7 @@ function applyDefaults(raw: Partial<JanusConfig>): JanusConfig {
       allowList: raw.privacy?.allowList,
       collapsePaths: raw.privacy?.collapsePaths ?? true,
     },
+    integrations: raw.integrations,
   };
 }
 
@@ -67,9 +72,9 @@ function parseProvider<T extends ProviderId | undefined>(
   if (typeof v !== "string") {
     throw new Error(`config: provider/fallbackProvider must be a string, received ${typeof v}`);
   }
-  if (!(VALID_PROVIDERS as readonly string[]).includes(v)) {
+  if (!(PROVIDER_IDS as readonly string[]).includes(v)) {
     throw new Error(
-      `config: provider "${v}" invalid. Options: ${VALID_PROVIDERS.join(", ")}`,
+      `config: provider "${v}" invalid. Options: ${PROVIDER_IDS.join(", ")}`,
     );
   }
   return v as ProviderId as ReturnType<typeof parseProvider<T>>;

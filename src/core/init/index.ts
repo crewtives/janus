@@ -14,7 +14,9 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import type { DiscordConfig, JanusConfig, ProjectConfig } from "../../config/types.ts";
+import { defaultModelSettings } from "../../config/providers.ts";
 import { discoverProjects, renderProjectEntry } from "../discover.ts";
+import { getCodexAuthStatus, resolveCodexHome } from "../codex-cli.ts";
 import { runDoctor, validateDiscordWebhook } from "../doctor.ts";
 import {
   defaultConfigPath,
@@ -52,6 +54,7 @@ export interface WizardState {
   cwd: string;
   configPath: string;
   existingConfig: JanusConfig | null;
+  provider: NonNullable<JanusConfig["provider"]>;
   vaultPath: string;
   projects: ProjectConfig[];
   discoverRoots?: string[];
@@ -61,6 +64,8 @@ export interface WizardState {
   launchdMinute: number;
   /** Whether to symlink the /daily-pulse skill into ~/.claude/skills at commit. */
   installSkill: boolean;
+  /** Whether to install the Codex MCP + SessionStart integration at commit. */
+  installCodex: boolean;
   /** UI language for the wizard. Persisted to config.language. */
   language: Language;
   /** Localized strings for the wizard, loaded from `language`. */
@@ -123,6 +128,9 @@ export async function runInit(opts: RunInitOptions): Promise<number> {
     log.info(s.configNone);
   }
 
+  // ─── Step 1.5: generation provider ─────────────────────────────────────────
+  if (await stepProvider(state, opts) === "abort") return 1;
+
   // ─── Step 2: auth check ────────────────────────────────────────────────────
   if (await stepAuth(state) === "abort") return 1;
 
@@ -134,6 +142,9 @@ export async function runInit(opts: RunInitOptions): Promise<number> {
 
   // ─── Step 5: discord (optional) ────────────────────────────────────────────
   if (await stepDiscord(state, opts) === "abort") return 1;
+
+  // ─── Step 5.5: Codex integration opt-in ────────────────────────────────────
+  if (await stepCodex(state, opts) === "abort") return 1;
 
   // ─── Step 6: build proposed config + diff + confirm ────────────────────────
   state.proposedConfig = buildProposedConfig(state);
@@ -185,6 +196,7 @@ function newState(
     cwd,
     configPath,
     existingConfig,
+    provider: existingConfig?.provider ?? "claude-code",
     vaultPath: existingConfig?.obsidianVault ?? "",
     projects: existingConfig?.projects ?? [],
     discoverRoots: existingConfig?.discoverRoots,
@@ -193,14 +205,47 @@ function newState(
     launchdHour: DEFAULT_HOUR,
     launchdMinute: DEFAULT_MINUTE,
     installSkill: false,
+    installCodex: false,
     language,
     s,
   };
 }
 
+async function stepProvider(state: WizardState, opts: RunInitOptions): Promise<"continue" | "abort"> {
+  if (opts.yes) return "continue";
+  const provider = await select({
+    message: state.language === "es" ? "¿Qué agente debe generar los informes?" : "Which agent should generate reports?",
+    options: [
+      { value: "claude-code", label: "Claude Code (default)" },
+      { value: "codex", label: "Codex CLI" },
+      { value: "gemini-cli", label: "Gemini CLI" },
+    ],
+    initialValue: state.provider,
+  });
+  if (isCancel(provider)) return abortWizard(state);
+  state.provider = provider as WizardState["provider"];
+  return "continue";
+}
+
 // ─── Step 2: auth ─────────────────────────────────────────────────────────────
 async function stepAuth(state: WizardState): Promise<"continue" | "abort"> {
   const { s } = state;
+  if (state.provider === "codex") {
+    const sp = spinner();
+    sp.start(state.language === "es" ? "Verificando autenticación de Codex…" : "Checking Codex authentication…");
+    const status = await getCodexAuthStatus();
+    sp.stop();
+    if (status.loggedIn) {
+      log.success(state.language === "es" ? "Codex autenticado" : "Codex authenticated");
+      return "continue";
+    }
+    log.warn(state.language === "es" ? "Codex no está autenticado; ejecutá `codex login`." : "Codex is not authenticated; run `codex login`.");
+    return "continue";
+  }
+  if (state.provider === "gemini-cli") {
+    log.info(state.language === "es" ? "La autenticación de Gemini será validada por doctor." : "Gemini authentication will be validated by doctor.");
+    return "continue";
+  }
   const sp = spinner();
   sp.start(s.authChecking);
   const status = await detectClaudeAuth();
@@ -587,6 +632,22 @@ async function stepSkill(state: WizardState): Promise<"continue" | "abort"> {
   return "continue";
 }
 
+async function stepCodex(state: WizardState, opts: RunInitOptions): Promise<"continue" | "abort"> {
+  if (opts.yes) {
+    state.installCodex = state.existingConfig?.integrations?.codex?.enabled === true;
+    return "continue";
+  }
+  const want = await confirm({
+    message: state.language === "es"
+      ? "¿Instalar memoria automática + MCP de Janus para Codex CLI?"
+      : "Install Janus automatic memory + MCP for Codex CLI?",
+    initialValue: true,
+  });
+  if (isCancel(want)) return abortWizard(state);
+  state.installCodex = want === true;
+  return "continue";
+}
+
 // ─── Step 8: COMMIT — write config + install plist ────────────────────────────
 async function commit(state: WizardState): Promise<void> {
   const { s } = state;
@@ -643,6 +704,45 @@ async function commit(state: WizardState): Promise<void> {
       log.info(s.skillNoSource);
     }
   }
+
+  const previouslyInstalledCodex = state.existingConfig?.integrations?.codex?.enabled === true;
+  if (state.installCodex) {
+    const {
+      ensureCodexMcp,
+      installCodexHook,
+      resolveJanusCommandSpec,
+    } = await import("./codex.ts");
+    const commandSpec = resolveJanusCommandSpec({
+      execPath: process.execPath,
+      main: Bun.main,
+      repoRoot: state.cwd,
+    });
+    const hook = await installCodexHook({
+      codexHome: resolveCodexHome(),
+      configPath: state.configPath,
+      commandSpec,
+    });
+    const mcp = await ensureCodexMcp({ commandSpec, configPath: state.configPath });
+    log.success(`Codex integration: hook ${hook.changed ? "installed" : "unchanged"} · MCP ${mcp}`);
+    log.info("Codex may ask you to review and trust the new SessionStart hook on first use.");
+  } else if (previouslyInstalledCodex) {
+    const {
+      removeCodexMcp,
+      uninstallCodexHook,
+      resolveJanusCommandSpec,
+    } = await import("./codex.ts");
+    const commandSpec = resolveJanusCommandSpec({
+      execPath: process.execPath,
+      main: Bun.main,
+      repoRoot: state.cwd,
+    });
+    const hook = await uninstallCodexHook({ codexHome: resolveCodexHome() });
+    const mcp = await removeCodexMcp({ commandSpec, configPath: state.configPath });
+    log.success(`Codex integration removed: hook ${hook.changed ? "removed" : "unchanged"} · MCP ${mcp}`);
+    if (mcp === "conflict") {
+      log.warn("Codex MCP server 'janus' uses a different command and was left untouched.");
+    }
+  }
 }
 
 // ─── Step 9: validate ─────────────────────────────────────────────────────────
@@ -681,6 +781,8 @@ async function stepValidate(state: WizardState): Promise<void> {
 
 function buildProposedConfig(state: WizardState): JanusConfig {
   const existing = state.existingConfig;
+  const providerDefaults = defaultModelSettings(state.provider);
+  const keepExistingModelSettings = (existing?.provider ?? "claude-code") === state.provider;
   return {
     obsidianVault: state.vaultPath,
     projects: state.projects,
@@ -691,9 +793,16 @@ function buildProposedConfig(state: WizardState): JanusConfig {
     intervalMs: existing?.intervalMs ?? 60_000,
     taskTimeoutMs: existing?.taskTimeoutMs ?? 30 * 60_000,
     stateDir: existing?.stateDir ?? resolve(state.cwd, ".janus"),
-    model: existing?.model ?? "sonnet",
-    effort: existing?.effort ?? "xhigh",
-    fallbackModel: existing?.fallbackModel ?? "opus",
+    provider: state.provider,
+    fallbackProvider: existing?.fallbackProvider,
+    model: keepExistingModelSettings ? existing?.model : providerDefaults.model,
+    effort: keepExistingModelSettings ? existing?.effort : providerDefaults.effort,
+    fallbackModel: keepExistingModelSettings ? existing?.fallbackModel : providerDefaults.fallbackModel,
+    privacy: existing?.privacy,
+    integrations: {
+      ...existing?.integrations,
+      codex: { enabled: state.installCodex },
+    },
     language: state.language,
   };
 }
@@ -715,7 +824,12 @@ function formatConfigSummary(cfg: JanusConfig): string {
   ];
   if (cfg.discord?.webhookUrl) lines.push(`Discord:   ${maskUrl(cfg.discord.webhookUrl)}`);
   if (cfg.discoverRoots?.length) lines.push(`Discover:  ${cfg.discoverRoots.join(", ")}`);
-  lines.push(`Model:     ${cfg.model} (fallback: ${cfg.fallbackModel}, effort: ${cfg.effort})`);
+  lines.push(`Provider:  ${cfg.provider ?? "claude-code"}`);
+  if (cfg.model || cfg.fallbackModel || cfg.effort) {
+    lines.push(
+      `Model:     ${formatValue(cfg.model)} (fallback: ${formatValue(cfg.fallbackModel)}, effort: ${formatValue(cfg.effort)})`,
+    );
+  }
   if (cfg.language) lines.push(`Language:  ${cfg.language}`);
   return lines.join("\n");
 }

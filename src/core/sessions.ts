@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 export interface SessionSummary {
+  source: "claude-code" | "codex";
   sessionId: string;
   path: string;
   firstTimestamp: string | null;
@@ -134,7 +135,7 @@ function extractText(content: unknown): string {
   return parts.join("\n");
 }
 
-function normalizeWhitespace(s: string): string {
+export function normalizeWhitespace(s: string): string {
   return s.replace(/\s+/g, " ").trim();
 }
 
@@ -177,6 +178,7 @@ export async function summarizeSession(jsonlPath: string, date?: string): Promis
   const hasSubagents = existsSync(subagentsDir);
 
   const summary: SessionSummary = {
+    source: "claude-code",
     sessionId,
     path: jsonlPath,
     firstTimestamp: null,

@@ -5,9 +5,14 @@ export default defineCommand({
     name: "mcp",
     description: "Launch the Janus MCP server (stdio). Connects Claude Code / Cursor / Codex as external agents.",
   },
-  args: {},
-  async run() {
+  args: {
+    config: {
+      type: "string",
+      description: "Absolute Janus config path selected during integration setup",
+    },
+  },
+  async run({ args }) {
     const { runMcpServer } = await import("../mcp/server.ts");
-    await runMcpServer();
+    await runMcpServer({ configPath: args.config });
   },
 });

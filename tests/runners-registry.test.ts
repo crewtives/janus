@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { createRunner, isValidProvider, resolveRunner } from "../src/runners/registry.ts";
 import { ClaudeCodeRunner } from "../src/runners/claude-code.ts";
 import { GeminiRunner } from "../src/runners/gemini.ts";
+import { CodexRunner } from "../src/runners/codex.ts";
 import type { JanusConfig } from "../src/config/types.ts";
 
 function configFor(provider?: JanusConfig["provider"], fallback?: JanusConfig["fallbackProvider"]): JanusConfig {
@@ -17,9 +18,10 @@ describe("registry.isValidProvider", () => {
   test("accepts known providers", () => {
     expect(isValidProvider("claude-code")).toBe(true);
     expect(isValidProvider("gemini-cli")).toBe(true);
+    expect(isValidProvider("codex")).toBe(true);
   });
   test("rejects unknown providers", () => {
-    expect(isValidProvider("codex")).toBe(false);
+    expect(isValidProvider("other")).toBe(false);
     expect(isValidProvider("")).toBe(false);
   });
 });
@@ -34,6 +36,11 @@ describe("registry.createRunner", () => {
     const r = createRunner("gemini-cli");
     expect(r).toBeInstanceOf(GeminiRunner);
     expect(r.id).toBe("gemini-cli");
+  });
+  test("creates CodexRunner for codex", () => {
+    const r = createRunner("codex");
+    expect(r).toBeInstanceOf(CodexRunner);
+    expect(r.id).toBe("codex");
   });
 });
 

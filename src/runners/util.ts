@@ -25,16 +25,20 @@ export async function streamLines(
   if (buf.trim()) onLine(buf);
 }
 
-export async function drainToString(stream: ReadableStream<Uint8Array>): Promise<string> {
-  const chunks: string[] = [];
+export async function drainToString(
+  stream: ReadableStream<Uint8Array>,
+  maxChars?: number,
+): Promise<string> {
+  let output = "";
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
-    chunks.push(decoder.decode(value, { stream: true }));
+    output += decoder.decode(value, { stream: true });
+    if (maxChars && output.length > maxChars) output = output.slice(-maxChars);
   }
-  return chunks.join("");
+  return output;
 }
 
 export function safeParse(line: string): Record<string, unknown> | null {

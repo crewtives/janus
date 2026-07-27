@@ -13,9 +13,17 @@ Product status snapshot as of **2026-05-22**, after shipping Phase 1 + 2 + 3 (fu
 > i18n. The suite is now **382 tests** (not 348). Code-signing and `npm publish`
 > remain scaffolded-but-off pending external credentials (see `ROADMAP.md`).
 
+> **Update 2026-07-27.** Codex CLI support is shipped: Codex can generate Janus artifacts,
+> its canonical session events feed pulse context, and `janus init` can install an automatic
+> scope-aware SessionStart memory hook plus MCP registration. The MCP surface now has 5 tools,
+> including `janus_get_project_context`.
+
 ## Positioning
 
-Janus is **the maker's personal historian**. It reads your work (git + Claude Code sessions) and writes the **continuous narrative** of your projects in a temporal hierarchy: daily → weekly → monthly → quarterly → yearly → spine. That narrative is **queryable via MCP** by other agents — Claude Code in other sessions can ask Janus "what did we do in X last week?" and get synthesized context, not raw logs.
+Janus is **the maker's personal historian**. It reads your work (git + Claude Code and Codex
+sessions) and writes the **continuous narrative** of your projects in a temporal hierarchy:
+daily → weekly → monthly → quarterly → yearly → spine. That narrative is **queryable via MCP**
+by other agents.
 
 The moat is the **quality of narrative synthesis** and the **temporal hierarchy of compaction**. Output universality (Notion/Confluence/etc.) is copyable table-stakes and not a strategic bet.
 
@@ -28,9 +36,10 @@ The moat is the **quality of narrative synthesis** and the **temporal hierarchy 
 - Hard rules: prose > bullets, soft third-person narrator, product-level language, no empty adjectives, cumulative continuity, honesty
 - Side-by-side eval loop: `scripts/eval-prompt-voice.ts` + `docs/eval/voice-overhaul.md`
 
-### Phase 1B · Multi-source ingestion ⏸ DEFERRED
+### Phase 1B · Multi-source ingestion ◐ PARTIAL
 
-Cursor sessions, Codex sessions, Linear, voice memos (Whisper), Calendar — all require interactive setup or local data that wasn't available.
+Codex session ingestion shipped on 2026-07-27. Cursor sessions, Linear, voice memos (Whisper),
+and Calendar remain deferred.
 
 ### Phase 1C · Bookkeeping metadata ✅
 
@@ -46,7 +55,8 @@ Cursor sessions, Codex sessions, Linear, voice memos (Whisper), Calendar — all
 
 - `src/mcp/server.ts` — vanilla JSON-RPC 2.0 stdio, ~250 LOC, 0 external deps
 - CLI: `bun janus mcp`
-- 4 typed tools: `janus_ask`, `janus_get_spine`, `janus_get_pulse`, `janus_list_projects`
+- 5 typed tools: `janus_get_project_context`, `janus_ask`, `janus_get_spine`,
+  `janus_get_pulse`, `janus_list_projects`
 - Janus vs companion-agent doc in `docs/mcp.md`
 
 ### Vault scaffolding (post-Phase 1) ✅

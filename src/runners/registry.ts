@@ -1,6 +1,7 @@
 import type { JanusConfig } from "../config/types.ts";
 import { ClaudeCodeRunner } from "./claude-code.ts";
 import { GeminiRunner } from "./gemini.ts";
+import { CodexRunner } from "./codex.ts";
 import type { LLMRunner } from "./types.ts";
 import { withFallback } from "./with-fallback.ts";
 import { redactingRunner } from "./redacting.ts";
@@ -10,19 +11,19 @@ import {
   type RedactOptions,
   type RedactPattern,
 } from "../core/privacy/redact.ts";
+import { PROVIDER_IDS, type ProviderId } from "../config/providers.ts";
 
-export type ProviderId = "claude-code" | "gemini-cli";
-
-const ALL_PROVIDERS: ProviderId[] = ["claude-code", "gemini-cli"];
+export type { ProviderId } from "../config/providers.ts";
 
 export function isValidProvider(s: string): s is ProviderId {
-  return (ALL_PROVIDERS as string[]).includes(s);
+  return (PROVIDER_IDS as readonly string[]).includes(s);
 }
 
 export function createRunner(provider: ProviderId): LLMRunner {
   switch (provider) {
     case "claude-code": return new ClaudeCodeRunner();
     case "gemini-cli": return new GeminiRunner();
+    case "codex": return new CodexRunner();
   }
 }
 
@@ -37,7 +38,7 @@ export function resolveRunner(config: JanusConfig, repoRoot?: string): LLMRunner
   const fb = config.fallbackProvider;
   const base = !fb || fb === (config.provider ?? "claude-code")
     ? primary
-    : withFallback(primary, createRunner(fb));
+    : withFallback(primary, withoutPrimaryModelSettings(createRunner(fb)));
 
   const privacy = config.privacy;
   if (privacy && privacy.enabled === false) return base;
@@ -57,4 +58,17 @@ export function resolveRunner(config: JanusConfig, repoRoot?: string): LLMRunner
     repoRoot,
   };
   return redactingRunner(base, opts);
+}
+
+function withoutPrimaryModelSettings(runner: LLMRunner): LLMRunner {
+  return {
+    id: runner.id,
+    capabilities: runner.capabilities,
+    run: (opts) => runner.run({
+      ...opts,
+      model: undefined,
+      effort: undefined,
+      fallbackModel: undefined,
+    }),
+  };
 }

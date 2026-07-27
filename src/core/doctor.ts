@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { Checkpoint } from "./checkpoint.ts";
+import { getCodexAuthStatus, resolveCodexHome } from "./codex-cli.ts";
 import { isRepo } from "./git.ts";
 import { DEFAULT_LABEL } from "./init/launchd.ts";
 import { loadConfig } from "../config/loader.ts";
@@ -50,6 +51,9 @@ export async function runDoctor(): Promise<boolean> {
   for (const provider of providersToCheck) {
     checks.push(...(await checkProvider(provider)));
   }
+  if (config?.integrations?.codex?.enabled) {
+    checks.push(...await checkCodexIntegration());
+  }
 
   if (config) {
     checks.push(checkPath("obsidianVault", config.obsidianVault));
@@ -80,6 +84,59 @@ async function checkProvider(provider: ProviderId): Promise<CheckResult[]> {
         await checkCommand("gemini", ["--version"]),
         checkGeminiAuth(),
       ];
+    case "codex":
+      return [
+        await checkCommand("codex", ["--version"]),
+        await checkCodexAuth(),
+      ];
+  }
+}
+
+async function checkCodexAuth(): Promise<CheckResult> {
+  try {
+    const status = await getCodexAuthStatus(CLAUDE_AUTH_TIMEOUT_MS);
+    if (!status.loggedIn) {
+      return { name: "codex auth", ok: false, detail: "not logged in — run `codex login`" };
+    }
+    return { name: "codex auth", ok: true, detail: status.detail || "logged in" };
+  } catch (error) {
+    return {
+      name: "codex auth",
+      ok: false,
+      detail: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+async function checkCodexIntegration(): Promise<CheckResult[]> {
+  const hookPath = join(resolveCodexHome(), "hooks.json");
+  let hookOk = false;
+  try {
+    hookOk = existsSync(hookPath) && (await Bun.file(hookPath).text()).includes("crewtives-janus");
+  } catch {
+    hookOk = false;
+  }
+  const hook: CheckResult = hookOk
+    ? { name: "codex SessionStart", ok: true, detail: "Janus hook installed (trust is confirmed by Codex on first use)" }
+    : { name: "codex SessionStart", ok: false, detail: "Janus hook missing — rerun `janus init`" };
+
+  try {
+    const proc = Bun.spawn(["codex", "mcp", "get", "janus", "--json"], { stdout: "pipe", stderr: "pipe", timeout: 10_000 });
+    const [, stderr] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+    const mcp: CheckResult = proc.exitCode === 0
+      ? { name: "codex MCP", ok: true, detail: "janus registered" }
+      : {
+          name: "codex MCP",
+          ok: false,
+          detail: stderr.trim() || "janus not registered — rerun `janus init`",
+        };
+    return [hook, mcp];
+  } catch (error) {
+    return [hook, { name: "codex MCP", ok: false, detail: error instanceof Error ? error.message : String(error) }];
   }
 }
 

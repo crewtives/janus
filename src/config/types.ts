@@ -1,3 +1,5 @@
+import type { EffortLevel, ProviderId } from "./providers.ts";
+
 export type ProjectStatus = "active" | "paused" | "archived";
 
 export interface ProjectConfig {
@@ -50,17 +52,18 @@ export interface JanusConfig {
   /** Active provider model. Default: sonnet (Claude). */
   model?: string;
   /** Effort level. Only used by providers that support it (Claude). Default: xhigh */
-  effort?: "low" | "medium" | "high" | "xhigh" | "max";
+  effort?: EffortLevel;
   /** Fallback model if the primary is overloaded. Default: opus (Claude). */
   fallbackModel?: string;
   /**
    * CLI agent used to generate reports.
    *  - "claude-code" (default): spawns `claude -p`.
    *  - "gemini-cli": spawns `gemini --prompt - --output-format json`.
+   *  - "codex": spawns an isolated `codex exec --json`.
    */
-  provider?: "claude-code" | "gemini-cli";
+  provider?: ProviderId;
   /** If the primary provider fails with a retriable error, retry with this one. */
-  fallbackProvider?: "claude-code" | "gemini-cli";
+  fallbackProvider?: ProviderId;
   /**
    * UI language for the `janus init` wizard. Defaults to "en". Set to "es"
    * to run the wizard in Spanish. Does NOT affect generated pulse content —
@@ -73,6 +76,11 @@ export interface JanusConfig {
    * `docs/PRIVACY.md` for what gets redacted and how to opt out.
    */
   privacy?: PrivacyConfig;
+  integrations?: {
+    codex?: {
+      enabled?: boolean;
+    };
+  };
 }
 
 export interface PrivacyConfig {

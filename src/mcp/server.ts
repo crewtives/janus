@@ -8,9 +8,10 @@
  * Por qué vanilla en vez de `@modelcontextprotocol/sdk`:
  *  - 0 dependencias adicionales (Janus se mantiene liviano).
  *  - Control total del wire format.
- *  - Trivial de auditar para un servidor con 4 tools.
+ *  - Trivial de auditar para un servidor con 5 tools.
  *
  * Tools expuestos:
+ *  - janus_get_project_context — scope + spine para el cwd actual.
  *  - janus_ask         — FTS5 search sobre el vault, filtros tipados.
  *  - janus_get_spine   — devuelve el project-spine de un proyecto.
  *  - janus_get_pulse   — devuelve un pulse concreto por (project, date).
@@ -29,6 +30,7 @@ import { join } from "node:path";
 import { loadConfig } from "../config/loader.ts";
 import type { JanusConfig, ProjectConfig } from "../config/types.ts";
 import { SearchIndex, type DocKind } from "../core/search-index.ts";
+import { getProjectContext } from "../core/project-context.ts";
 import pkg from "../../package.json" with { type: "json" };
 
 // ─── Protocol types ──────────────────────────────────────────────────────
@@ -36,6 +38,7 @@ import pkg from "../../package.json" with { type: "json" };
 const PROTOCOL_VERSION = "2024-11-05";
 const SERVER_NAME = "janus";
 const SERVER_VERSION = pkg.version;
+const SERVER_INSTRUCTIONS = "Before substantive work in a repository, call janus_get_project_context with the actual current working directory. If tracked=false, continue without Janus context. If tracked=true, use the returned spine as project memory and call janus_ask only when deeper history is needed.";
 
 interface JsonRpcRequest {
   jsonrpc: "2.0";
@@ -73,6 +76,24 @@ interface ServerContext {
 // ─── Tools ────────────────────────────────────────────────────────────────
 
 const TOOLS: Array<{ def: ToolDefinition; handler: ToolHandler }> = [
+  {
+    def: {
+      name: "janus_get_project_context",
+      description: "Read-only startup lookup for the current working directory. Returns tracked=false outside Janus scope; otherwise returns only the matched project's spine and status. Call this before substantive project work.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          cwd: { type: "string", description: "The client's actual current working directory." },
+        },
+        required: ["cwd"],
+      },
+    },
+    handler: async (args, ctx) => {
+      const cwd = typeof args.cwd === "string" ? args.cwd.trim() : "";
+      if (!cwd) return errorResult("cwd is required and must be non-empty");
+      return textResult(JSON.stringify(await getProjectContext(cwd, ctx.config.projects)));
+    },
+  },
   {
     def: {
       name: "janus_ask",
@@ -244,6 +265,7 @@ async function handleRequest(req: JsonRpcRequest, ctx: ServerContext): Promise<J
           protocolVersion: PROTOCOL_VERSION,
           capabilities: { tools: {} },
           serverInfo: { name: SERVER_NAME, version: SERVER_VERSION },
+          instructions: SERVER_INSTRUCTIONS,
         },
       };
     }
@@ -313,11 +335,11 @@ function errorResult(text: string): ToolResult {
 
 // ─── Entry point ─────────────────────────────────────────────────────────
 
-export async function runMcpServer(opts?: { stat?: typeof stat }): Promise<void> {
+export async function runMcpServer(opts?: { stat?: typeof stat; configPath?: string }): Promise<void> {
   // stat se usa para evitar reasonable arg deps en tests; default = node:fs/promises
   void opts?.stat;
 
-  const config = await loadConfig();
+  const config = await loadConfig(opts?.configPath);
   const ctx: ServerContext = { config };
 
   process.stderr.write(`[janus-mcp] server starting · protocol=${PROTOCOL_VERSION} · ${TOOLS.length} tools\n`);

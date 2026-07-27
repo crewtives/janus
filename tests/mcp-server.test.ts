@@ -40,6 +40,7 @@ beforeEach(async () => {
     effort: "xhigh",
     provider: "claude-code",
   };
+  await mkdir(config.projects[0]!.repoPath, { recursive: true });
   ctx = { config };
 });
 
@@ -48,16 +49,18 @@ afterEach(async () => {
 });
 
 describe("MCP server protocol", () => {
-  test("initialize returns protocolVersion and serverInfo", async () => {
+  test("initialize returns protocolVersion, serverInfo, and startup instructions", async () => {
     const resp = await handleRequest({ jsonrpc: "2.0", id: 1, method: "initialize" }, ctx);
     expect(resp).not.toBeNull();
     expect(resp!.result).toBeDefined();
-    const r = resp!.result as { protocolVersion: string; serverInfo: { name: string; version: string } };
+    const r = resp!.result as { protocolVersion: string; serverInfo: { name: string; version: string }; instructions: string };
     expect(r.protocolVersion).toBe("2024-11-05");
     expect(r.serverInfo.name).toBe("janus");
     // Version must track package.json so `janus mcp` reports the real release,
     // not a hardcoded literal that drifts across bumps.
     expect(r.serverInfo.version).toBe(pkg.version);
+    expect(r.instructions).toContain("janus_get_project_context");
+    expect(r.instructions).toContain("working directory");
   });
 
   test("notifications/initialized → no response", async () => {
@@ -65,16 +68,17 @@ describe("MCP server protocol", () => {
     expect(resp).toBeNull();
   });
 
-  test("tools/list returns the 4 tools with schema", async () => {
+  test("tools/list returns the 5 tools with schema", async () => {
     const resp = await handleRequest({ jsonrpc: "2.0", id: 2, method: "tools/list" }, ctx);
     expect(resp).not.toBeNull();
     const result = resp!.result as { tools: Array<{ name: string; inputSchema: object }> };
-    expect(result.tools).toHaveLength(4);
+    expect(result.tools).toHaveLength(5);
     const names = result.tools.map((t) => t.name);
     expect(names).toContain("janus_ask");
     expect(names).toContain("janus_get_spine");
     expect(names).toContain("janus_get_pulse");
     expect(names).toContain("janus_list_projects");
+    expect(names).toContain("janus_get_project_context");
     for (const t of result.tools) {
       expect(t.inputSchema).toBeDefined();
     }
@@ -93,6 +97,40 @@ describe("MCP server protocol", () => {
 });
 
 describe("MCP tools", () => {
+  test("janus_get_project_context resolves the current tracked repository", async () => {
+    const resp = await handleRequest(
+      {
+        jsonrpc: "2.0",
+        id: 4,
+        method: "tools/call",
+        params: { name: "janus_get_project_context", arguments: { cwd: ctx.config.projects[0]!.repoPath } },
+      },
+      ctx,
+    );
+    const r = resp!.result as { content: Array<{ text: string }>; isError?: boolean };
+    expect(r.isError).toBeUndefined();
+    expect(JSON.parse(r.content[0]!.text)).toMatchObject({
+      tracked: true,
+      state: "ready",
+      project: "demo",
+    });
+  });
+
+  test("janus_get_project_context is a private no-op outside configured repositories", async () => {
+    const resp = await handleRequest(
+      {
+        jsonrpc: "2.0",
+        id: 4,
+        method: "tools/call",
+        params: { name: "janus_get_project_context", arguments: { cwd: tmpRoot } },
+      },
+      ctx,
+    );
+    const r = resp!.result as { content: Array<{ text: string }> };
+    expect(JSON.parse(r.content[0]!.text)).toEqual({ tracked: false, state: "untracked" });
+    expect(r.content[0]!.text).not.toContain("demo");
+  });
+
   test("janus_list_projects returns the projects from the config", async () => {
     const resp = await handleRequest(
       {

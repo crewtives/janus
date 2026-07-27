@@ -140,7 +140,7 @@ await check("detectAnniversary: 2025-05-21 + 2026-05-21 → 1", () => {
 });
 
 // 4. MCP server smoke
-await check("MCP server tools/list returns 4 tools", async () => {
+await check("MCP server tools/list returns 5 tools", async () => {
   const tmpRoot = join(tmpdir(), `smoke-mcp-${Date.now()}`);
   const vaultPath = join(tmpRoot, "vault");
   const projAbs = join(vaultPath, "Projects", "demo");
@@ -155,7 +155,7 @@ await check("MCP server tools/list returns 4 tools", async () => {
   try {
     const resp = await handleRequest({ jsonrpc: "2.0", id: 1, method: "tools/list" }, { config });
     const result = resp?.result as { tools: Array<{ name: string }> };
-    if (result.tools.length !== 4) throw new Error(`expected 4 tools, got ${result.tools.length}`);
+    if (result.tools.length !== 5) throw new Error(`expected 5 tools, got ${result.tools.length}`);
     return `${result.tools.length} tools: ${result.tools.map((t) => t.name).join(", ")}`;
   } finally {
     await rm(tmpRoot, { recursive: true, force: true });

@@ -2,9 +2,9 @@ import { Eta } from "eta";
 import type { GitActivity, GitCommit } from "./git.ts";
 import type { SessionSummary } from "./sessions.ts";
 import voiceSpec from "../prompts/_voice.md" with { type: "text" };
-import dailyPulseTemplate from "../prompts/daily-pulse.v9.md" with { type: "text" };
+import dailyPulseTemplate from "../prompts/daily-pulse.v10.md" with { type: "text" };
 
-export const PROMPT_VERSION = "v9" as const;
+export const PROMPT_VERSION = "v10" as const;
 
 /**
  * Returns the shared voice spec (`_voice.md`). Async to preserve the

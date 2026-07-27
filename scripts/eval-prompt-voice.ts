@@ -28,7 +28,7 @@ import { loadConfig } from "../src/config/loader.ts";
 import type { ProjectConfig } from "../src/config/types.ts";
 import { Checkpoint } from "../src/core/checkpoint.ts";
 import { getActivity } from "../src/core/git.ts";
-import { findSessionsForDate, summarizeSession } from "../src/core/sessions.ts";
+import { findSessionTranscriptsForDate, summarizeTranscript } from "../src/ingest/index.ts";
 import { loadPreviousPulses } from "../src/core/previous-pulses.ts";
 import { detectStrategyStatus } from "../src/core/strategy-status.ts";
 import { loadActiveTracks } from "../src/core/active-tracks.ts";
@@ -103,12 +103,12 @@ async function evalPulseForDate(args: {
     readIfExists(claudeMdPath(project.repoPath)),
     readStrategy(project.obsidianPath, project.repoPath),
     readRepoReadme(project.repoPath),
-    findSessionsForDate(project.repoPath, date),
+    findSessionTranscriptsForDate({ project, projects: config.projects, date }),
     loadPreviousPulses({ obsidianPath: project.obsidianPath, currentDate: date, daysBack: 7 }),
     detectStrategyStatus({ obsidianPath: project.obsidianPath, repoPath: project.repoPath, currentDate: date }),
     loadActiveTracks({ vaultPath: vaultRoot, project: project.name }),
   ]);
-  const sessions = await Promise.all(sessionFiles.map((f) => summarizeSession(f, date)));
+  const sessions = await Promise.all(sessionFiles.map((session) => summarizeTranscript(session, date)));
 
   const vaultRelPath = project.obsidianPath.startsWith(vaultRoot)
     ? project.obsidianPath.slice(vaultRoot.length).replace(/^\/+/, "")

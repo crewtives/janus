@@ -24,8 +24,8 @@ beforeAll(async () => {
 });
 
 describe("template", () => {
-  test("PROMPT_VERSION is v9", () => {
-    expect(PROMPT_VERSION).toBe("v9");
+  test("PROMPT_VERSION is v10", () => {
+    expect(PROMPT_VERSION).toBe("v10");
   });
 
   test("loadVoiceSpec returns a non-empty string with the 10 hard rules", async () => {
@@ -61,6 +61,7 @@ describe("template", () => {
       }),
       sessions: [
         {
+          source: "claude-code",
           sessionId: "11111111-2222-3333-4444-555566667777",
           path: "/tmp/x.jsonl",
           firstTimestamp: "2026-05-20T10:00:00Z",
@@ -101,7 +102,7 @@ describe("template", () => {
     expect(out).toContain("feat: new");
     expect(out).toContain("11111111");
     expect(out).toContain("claude-sonnet-4-6");
-    expect(out).toContain("v9");
+    expect(out).toContain("v10");
     // session mining: userIntent + decision/blocker snippets rendered in the prompt
     expect(out).toContain("Implement JSONL session parser");
     expect(out).toContain("Bun.file");
@@ -196,7 +197,7 @@ describe("template", () => {
     expect(out).not.toContain("Previous pulse:");
   });
 
-  test("v9 emits a de-fused pulse: one hub up-link, no footer/date-chain, canonical tags (R8/R10/R11/R12)", async () => {
+  test("v10 emits a de-fused pulse: one hub up-link, no footer/date-chain, canonical tags (R8/R10/R11/R12)", async () => {
     const ctx = buildPromptContext({
       project: "fresh-proj",
       date: "2026-05-20",

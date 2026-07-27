@@ -61,6 +61,11 @@ describe("drainToString", () => {
     const stream = streamFromChunks([]);
     expect(await drainToString(stream)).toBe("");
   });
+
+  test("can retain only a bounded diagnostic tail", async () => {
+    const stream = streamFromChunks(["01234", "56789"]);
+    expect(await drainToString(stream, 6)).toBe("456789");
+  });
 });
 
 describe("cleanEnv", () => {

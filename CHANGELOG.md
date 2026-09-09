@@ -4,6 +4,22 @@ All notable changes to Janus are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-09-09
+
+### Added
+
+- A roadmap item written as a `###` section under its column heading becomes an enriched card:
+  it owns a heading, so it can be linked to, and its body is the reasoning that put the work
+  where it is. Checkbox lines keep working for projects that emit only those. On the canvas such
+  a card is a `file` node with a `subpath` to its own section — one click opens it, and unlike a
+  text node it counts for backlinks and is reachable from search, which removes the invisibility
+  the canvas format otherwise costs.
+
+### Fixed
+
+- A canvas write reported the markdown column counts, describing a file it had not written. The
+  canvas is an infinite surface, so it draws every card and the column cap never applies.
+
 ## [0.6.0] — 2026-09-09
 
 ### Added

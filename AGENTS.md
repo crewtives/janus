@@ -133,7 +133,10 @@ New tables or columns are a schema migration. **Open an issue first** before add
 
 Welcome:
 - Bug fixes with a failing test.
-- New `bun janus <verb>` subcommands that fit the temporal-narrative model.
+- New `bun janus <verb>` subcommands that fit the temporal-narrative model. A
+  status view over artifacts Janus already wrote counts: `janus kanvas` renders
+  the roadmap mirrors it already maintains and asserts nothing new, which is why
+  it belongs here rather than being a tracker.
 - New prompt versions (always a new file).
 - New `LLMRunner` adapters in `src/runners/`.
 - New MCP tools in `src/mcp/server.ts` exposing data Janus already indexes.

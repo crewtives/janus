@@ -135,7 +135,7 @@ All versioned prompts inject **`src/prompts/_voice.md`** as the single narrative
 │   └── Tracks/                      # tracks materialized from weeklies
 │       ├── <slug-1>.md
 │       └── <slug-2>.md
-├── Dashboards/                      # global views (generate-dashboards)
+├── Dashboards/                      # global views (generate-dashboards) + Kanvas.md (janus kanvas)
 │   ├── Janus Pulse.md               # global cross-project view
 │   ├── Open Risks.md                # pulses with risks > 0
 │   ├── Drift.md                     # pulses with status = some-drift

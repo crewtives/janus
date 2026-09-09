@@ -4,6 +4,18 @@ All notable changes to Janus are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-09-09
+
+### Added
+
+- `janus kanvas --canvas` writes the board as a JSON Canvas file — Obsidian's native visual
+  board — instead of the markdown table. Markdown has no column primitive, so the table reads
+  as a spreadsheet; this is the format that actually draws a board, and the plan recorded it as
+  the thing to revisit once the board was wanted as a spatial artifact. Two costs come with it
+  and are accepted rather than solved: canvas content is outside Obsidian's search, and a
+  `.canvas` has no frontmatter, so ownership moves to a top-level `janusManaged` key. The
+  markdown board is unchanged and is still what the nightly run writes.
+
 ## [0.5.4] — 2026-09-09
 
 ### Fixed

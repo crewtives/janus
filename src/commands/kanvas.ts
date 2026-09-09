@@ -12,6 +12,10 @@ export default defineCommand({
       description: "Report the outcome without touching the vault",
       default: false,
     },
+    project: {
+      type: "string",
+      description: "Render only this project, into its own vault folder (the shared board is untouched)",
+    },
     "allow-empty": {
       // Not --force: that flag means "reprocess even if already done" everywhere
       // else in Janus, a non-destructive override. This one can wipe a board.
@@ -28,6 +32,7 @@ export default defineCommand({
       today: todayLocal(),
       dryRun: args["dry-run"],
       allowEmpty: args["allow-empty"],
+      project: args.project,
     });
     console.log(line);
   },

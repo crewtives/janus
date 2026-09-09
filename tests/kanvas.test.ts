@@ -12,6 +12,7 @@ import {
   buildBoardModel,
   collectProjectCards,
   normalizeColumn,
+  projectBoardPath,
   renderBoard,
   validateBoard,
   writeBoard,
@@ -914,5 +915,107 @@ describe("cell labels", () => {
     const model = emptyModel();
     model.cards.push({ id: "alpha/p", project: "alpha", title: "a | b", column: "now", provenance: "reconciled" });
     expect(renderBoard(model).markdown).toContain("a \\| b");
+  });
+});
+
+describe("per-project board", () => {
+  test("renders only that project and leaves the shared board alone", async () => {
+    const { config, cleanup } = await setup([
+      { name: "alpha", roadmap: RECONCILED },
+      { name: "beta", roadmap: RECONCILED },
+    ]);
+    const model = await buildBoardModel({ config, today: "2026-09-09" });
+
+    const shared = await writeBoard({ model, vaultPath: config.obsidianVault });
+    expect(shared.outcome).toBe("written");
+    const sharedBytes = await Bun.file(boardPath(config.obsidianVault)).text();
+
+    const beta = config.projects.find((p) => p.name === "beta")!;
+    const scoped = await writeBoard({
+      model,
+      vaultPath: config.obsidianVault,
+      scope: { project: "beta", obsidianPath: beta.obsidianPath },
+    });
+    expect(scoped.outcome).toBe("written");
+    expect(scoped.path).toBe(projectBoardPath(beta.obsidianPath, "beta"));
+
+    const md = await Bun.file(scoped.path).text();
+    expect(md).toContain("# Kanvas — beta");
+    expect(md).toContain("beta");
+    expect(md).not.toContain("— alpha");
+    // The cross-project lane has no place on a one-project board.
+    expect(md).not.toContain("## Blocked — cross-project");
+    // And the shared board is byte-identical.
+    expect(await Bun.file(boardPath(config.obsidianVault)).text()).toBe(sharedBytes);
+    await cleanup();
+  });
+
+  test("a scoped board still refuses a file Janus does not own", async () => {
+    const { config, cleanup } = await setup([{ name: "alpha", roadmap: RECONCILED }]);
+    const model = await buildBoardModel({ config, today: "2026-09-09" });
+    const alpha = config.projects[0]!;
+    const mine = "---\ntitle: mío\n---\n\nhand written\n";
+    await writeFile(projectBoardPath(alpha.obsidianPath, "alpha"), mine);
+    const r = await writeBoard({
+      model,
+      vaultPath: config.obsidianVault,
+      scope: { project: "alpha", obsidianPath: alpha.obsidianPath },
+    });
+    expect(r.outcome).toBe("not-ours");
+    expect(await Bun.file(r.path).text()).toBe(mine);
+    await cleanup();
+  });
+
+  test("an identifier with an underscore stays literal in a cell", () => {
+    // Stripping the backticks that protected `SIGNUP_URL` turned the underscore
+    // into an italics marker that ran to the next one and ate the rest of the row.
+    const model = emptyModel();
+    model.cards.push({
+      id: "alpha/s",
+      project: "alpha",
+      title: "Revert the `SIGNUP_URL` constant once Free reaches GA",
+      column: "now",
+      provenance: "inferred",
+    });
+    const cell = renderBoard(model).markdown.split("\n").find((l) => l.includes("— alpha"))!;
+    expect(cell).toContain("SIGNUP\\_URL");
+  });
+});
+
+describe("scoped board honesty", () => {
+  test("cells drop the project suffix when every card is that project", async () => {
+    const { config, cleanup } = await setup([{ name: "alpha", roadmap: RECONCILED }]);
+    const model = await buildBoardModel({ config, today: "2026-09-09" });
+    const alpha = config.projects[0]!;
+    const r = await writeBoard({
+      model,
+      vaultPath: config.obsidianVault,
+      scope: { project: "alpha", obsidianPath: alpha.obsidianPath },
+    });
+    const md = await Bun.file(r.path).text();
+    expect(md).toContain("# Kanvas — alpha");
+    expect(md).not.toContain("— alpha |");
+    await cleanup();
+  });
+
+  test("a scoped board does not claim the nightly run rewrites it", async () => {
+    // It is written only on an explicit --project run; saying otherwise would
+    // have the artifact assert something false about its own lifecycle.
+    const { config, cleanup } = await setup([{ name: "alpha", roadmap: RECONCILED }]);
+    const model = await buildBoardModel({ config, today: "2026-09-09" });
+    const alpha = config.projects[0]!;
+    const scoped = await writeBoard({
+      model,
+      vaultPath: config.obsidianVault,
+      scope: { project: "alpha", obsidianPath: alpha.obsidianPath },
+    });
+    const scopedMd = await Bun.file(scoped.path).text();
+    expect(scopedMd).toContain("--project alpha");
+    expect(scopedMd).not.toContain("regenerates this file on every run");
+
+    await writeBoard({ model, vaultPath: config.obsidianVault });
+    const sharedMd = await Bun.file(boardPath(config.obsidianVault)).text();
+    expect(sharedMd).toContain("regenerates this file on every run");
+    await cleanup();
   });
 });

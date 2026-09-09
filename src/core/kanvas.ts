@@ -180,6 +180,15 @@ export function boardPath(vaultPath: string): string {
   return join(vaultPath, "Dashboards", "Kanvas.md");
 }
 
+/**
+ * A single project's board, next to its spine and roadmap where someone looking
+ * for that project already goes. Written only when explicitly asked for: the
+ * nightly run keeps writing the cross-project board and nothing else.
+ */
+export function projectBoardPath(obsidianPath: string, project: string): string {
+  return join(obsidianPath, `${project}-kanvas.md`);
+}
+
 // ─── Blocked lane and model assembly ────────────────────────────────────────
 
 /**
@@ -329,8 +338,19 @@ function cellLabel(title: string): string {
   return `${escapeCell((lastSpace > CELL_CHARS * 0.6 ? cut.slice(0, lastSpace) : cut).trimEnd())}…`;
 }
 
+/**
+ * A cell is a label, so any `_` or `*` left in it is literal text — an
+ * identifier like `SIGNUP_URL`, not emphasis. Stripping the backticks that used
+ * to protect it turned the underscore into an italics marker that ran until the
+ * next one and swallowed the rest of the cell; escaping is what keeps the label
+ * readable as written.
+ */
+function escapeMarkdown(text: string): string {
+  return text.replace(/([_*])/g, "\\$1");
+}
+
 function escapeCell(text: string): string {
-  return text.replace(/\|/g, "\\|");
+  return escapeMarkdown(text).replace(/\|/g, "\\|");
 }
 
 /**
@@ -371,7 +391,7 @@ function fairSlice(cards: BoardCard[], cap: number): BoardCard[] {
  * Pure function of the model — no clock, no filesystem. That is what makes the
  * byte-stability contract testable without touching a vault.
  */
-export function renderBoard(model: BoardModel): RenderResult {
+export function renderBoard(model: BoardModel, scope?: string): RenderResult {
   const byColumn = new Map<Column, BoardCard[]>();
   for (const col of COLUMNS) byColumn.set(col, []);
   for (const card of model.cards) byColumn.get(card.column)!.push(card);
@@ -404,7 +424,7 @@ export function renderBoard(model: BoardModel): RenderResult {
     "---",
   ];
 
-  const out: string[] = [...fm, "", "# Kanvas", ""];
+  const out: string[] = [...fm, "", scope ? `# Kanvas — ${scope}` : "# Kanvas", ""];
 
   if (model.partial) {
     out.push(
@@ -422,7 +442,8 @@ export function renderBoard(model: BoardModel): RenderResult {
       const card = shown.get(c)![i];
       if (!card) return "";
       const mark = card.provenance === "inferred" ? " _(inferred)_" : "";
-      return `${cellLabel(card.title)} — ${card.project}${mark}`;
+      const who = scope ? "" : ` — ${card.project}`;
+      return `${cellLabel(card.title)}${who}${mark}`;
     });
     out.push(`| ${cells.join(" | ")} |`);
   }
@@ -435,6 +456,12 @@ export function renderBoard(model: BoardModel): RenderResult {
   }
   if ([...overflow.values()].some((n) => n > 0)) out.push("");
 
+  if (scope) {
+    out.push(
+      "The blocked lane is cross-project — every blocker row is recorded without a project — so it lives on the shared board rather than here.",
+      "",
+    );
+  } else {
   out.push("## Blocked — cross-project", "");
   if (model.blockedOutcome === "unreachable") {
     out.push("State database unreachable, so this lane is **unknown**, not empty.", "");
@@ -452,6 +479,7 @@ export function renderBoard(model: BoardModel): RenderResult {
       out.push(`- ${escapeCell(b.text)} — last reported ${b.lastSeen}`);
     }
     out.push("");
+  }
   }
 
   if (noMirror.length > 0) {
@@ -477,7 +505,9 @@ export function renderBoard(model: BoardModel): RenderResult {
   }
 
   out.push(
-    "Janus regenerates this file on every run. To take it over, set `managed_by_janus` to false in the frontmatter above; to hand it back, delete the file and the next run recreates it.",
+    scope
+      ? `Written only when you ask for it: \`janus kanvas --project ${scope}\`. The nightly run refreshes the shared board, not this one. To take this file over, set \`managed_by_janus\` to false in the frontmatter above.`
+      : "Janus regenerates this file on every run. To take it over, set `managed_by_janus` to false in the frontmatter above; to hand it back, delete the file and the next run recreates it.",
     "",
   );
 
@@ -508,6 +538,16 @@ export function validateBoard(md: string): string | null {
   return null;
 }
 
+/** Narrow the model to one project. The blocked lane is dropped: its rows carry no project. */
+function scopeModel(model: BoardModel, project: string): BoardModel {
+  return {
+    ...model,
+    cards: model.cards.filter((c) => c.project === project),
+    projects: model.projects.filter((p) => p.project === project),
+    blocked: [],
+  };
+}
+
 function isDegenerate(model: BoardModel): boolean {
   const definite = model.projects.filter((p) => p.outcome !== "unreadable");
   return model.cards.length === 0 || definite.length === 0;
@@ -523,9 +563,14 @@ export async function writeBoard(opts: {
   vaultPath: string;
   allowEmpty?: boolean;
   dryRun?: boolean;
+  /** Render only this project, into its own folder, leaving the shared board alone. */
+  scope?: { project: string; obsidianPath: string };
 }): Promise<WriteResult> {
-  const path = boardPath(opts.vaultPath);
-  const { markdown, rendered, summarized } = renderBoard(opts.model);
+  const path = opts.scope
+    ? projectBoardPath(opts.scope.obsidianPath, opts.scope.project)
+    : boardPath(opts.vaultPath);
+  const model = opts.scope ? scopeModel(opts.model, opts.scope.project) : opts.model;
+  const { markdown, rendered, summarized } = renderBoard(model, opts.scope?.project);
   const base = { path, rendered, summarized, declined: opts.model.declined };
   const file = Bun.file(path);
   const existing = (await file.exists()) ? await file.text() : null;
@@ -542,7 +587,7 @@ export async function writeBoard(opts: {
     }
   }
 
-  if (existing !== null && isDegenerate(opts.model) && !opts.allowEmpty) {
+  if (existing !== null && isDegenerate(model) && !opts.allowEmpty) {
     return { ...base, outcome: "degenerate", detail: "model is empty — refusing to wipe the board (--allow-empty overrides)" };
   }
 
@@ -605,13 +650,22 @@ export async function runKanvas(opts: {
   today: string;
   dryRun?: boolean;
   allowEmpty?: boolean;
+  /** Render only this project into its own folder, leaving the shared board alone. */
+  project?: string;
 }): Promise<{ result: WriteResult; line: string }> {
+  let scope: { project: string; obsidianPath: string } | undefined;
+  if (opts.project) {
+    const found = opts.config.projects.find((p) => p.name === opts.project);
+    if (!found) throw new Error(`Project not found: ${opts.project}`);
+    scope = { project: found.name, obsidianPath: found.obsidianPath };
+  }
   const model = await buildBoardModel({ config: opts.config, today: opts.today });
   const result = await writeBoard({
     model,
     vaultPath: opts.config.obsidianVault,
     allowEmpty: opts.allowEmpty,
     dryRun: opts.dryRun,
+    scope,
   });
   return {
     result,

@@ -16,9 +16,9 @@ import { existsSync } from "node:fs";
 import { mkdir, rename } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { JanusConfig } from "../config/types.ts";
-import { Checkpoint } from "./checkpoint.ts";
+import { Checkpoint, hasStateDb } from "./checkpoint.ts";
 import { readIfExists, roadmapPath } from "./obsidian.ts";
-import { readFreezeFlags, splitFrontmatter } from "./frontmatter.ts";
+import { describeFreeze, readFreezeFlags, readScalar, splitFrontmatter } from "./frontmatter.ts";
 
 export type Column = "now" | "next" | "blocked" | "done";
 
@@ -79,12 +79,6 @@ function slug(title: string): string {
     .slice(0, 60);
 }
 
-/** Read one scalar out of an already-split frontmatter block. */
-function readScalar(frontmatter: string, key: string): string | null {
-  const m = frontmatter.match(new RegExp(`^${key}:\\s*(\\S.*?)\\s*$`, "m"));
-  return m ? m[1]! : null;
-}
-
 function parseCards(body: string, project: string, provenance: CardProvenance): BoardCard[] {
   const cards: BoardCard[] = [];
   let heading = "";
@@ -117,12 +111,28 @@ function parseCards(body: string, project: string, provenance: CardProvenance): 
  * "this project could not be read" (R6). One bad mirror costs that project's
  * cards and nothing else.
  */
+export function activeBoardProjects(config: JanusConfig): JanusConfig["projects"] {
+  return config.projects.filter((p) => (p.status ?? "active") !== "archived");
+}
+
+/**
+ * Today in LOCAL time. Every caller must inject the same value: the nightly
+ * block and `doctor` already derive it locally, so a UTC-derived one would sit
+ * a day ahead for part of every evening in a negative offset, changing both
+ * `generated_at` and the recency-window cutoff for the same moment.
+ */
+export function todayLocal(now: Date = new Date()): string {
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 export async function collectProjectCards(opts: { config: JanusConfig }): Promise<ProjectCardsResult> {
   const cards: BoardCard[] = [];
   const projects: ProjectState[] = [];
 
-  for (const project of opts.config.projects) {
-    if ((project.status ?? "active") === "archived") continue;
+  for (const project of activeBoardProjects(opts.config)) {
     const name = project.name;
     try {
       const content = await readIfExists(roadmapPath(project.obsidianPath));
@@ -136,9 +146,13 @@ export async function collectProjectCards(opts: { config: JanusConfig }): Promis
         projects.push({ project: name, outcome: "no-source" });
         continue;
       }
+      // Provenance follows `needs_review` alone: a mirror Janus inferred and the
+      // user then reviewed has been taken over by a human, whatever wrote it
+      // first. Gating on `source` too would strand a pulse-inferred mirror as
+      // "inferred" forever, and would treat the two pulse-derived source values
+      // differently for no reason.
       const { needsReview } = readFreezeFlags(content);
-      const inferredSource = source !== null && /^pulse-inference/.test(source);
-      const provenance: CardProvenance = needsReview === false && !inferredSource ? "reconciled" : "inferred";
+      const provenance: CardProvenance = needsReview === false ? "reconciled" : "inferred";
       const parsed = parseCards(body, name, provenance);
       if (parsed.length === 0) {
         projects.push({ project: name, outcome: "no-source" });
@@ -194,7 +208,7 @@ export interface BoardModel {
 }
 
 /** Four weekly periods. Below two the lane would flicker empty between rollups. */
-const DEFAULT_WINDOW_DAYS = 28;
+const WINDOW_DAYS = 28;
 
 function daysBefore(date: string, days: number): string {
   const d = new Date(`${date}T00:00:00Z`);
@@ -209,11 +223,11 @@ function readBlocked(
 ): { entries: BlockedEntry[]; outcome: BlockerSourceOutcome; declined: number } {
   // Opening a missing state dir would silently create an empty database, so the
   // file has to be checked before the handle is opened — there is no error to catch.
-  if (!stateDir || !existsSync(join(stateDir, "state.db"))) {
+  if (!hasStateDb(stateDir)) {
     return { entries: [], outcome: "unreachable", declined: 0 };
   }
   const cutoff = daysBefore(today, windowDays);
-  const cp = Checkpoint.open(stateDir);
+  const cp = Checkpoint.open(stateDir!);
   try {
     const rows = cp.listBlockerHistory();
     const inWindow = rows.filter((r) => r.lastSeen >= cutoff);
@@ -244,13 +258,9 @@ function readBlocked(
  * Build the whole board model. Deterministic: `today` is injected, never read
  * from the clock, so the recency window and the rendered bytes are reproducible.
  */
-export async function buildBoardModel(opts: {
-  config: JanusConfig;
-  today: string;
-  windowDays?: number;
-}): Promise<BoardModel> {
+export async function buildBoardModel(opts: { config: JanusConfig; today: string }): Promise<BoardModel> {
   const { cards, projects } = await collectProjectCards({ config: opts.config });
-  const blocked = readBlocked(opts.config.stateDir, opts.today, opts.windowDays ?? DEFAULT_WINDOW_DAYS);
+  const blocked = readBlocked(opts.config.stateDir, opts.today, WINDOW_DAYS);
   const partial = projects.some((p) => p.outcome === "unreadable") || blocked.outcome === "unreachable";
   return {
     today: opts.today,
@@ -442,15 +452,9 @@ export async function writeBoard(opts: {
   const existing = existsSync(path) ? await Bun.file(path).text() : null;
 
   if (existing !== null) {
+    const freeze = describeFreeze(existing);
+    if (freeze) return { ...base, outcome: "frozen", detail: freeze.message };
     const flags = readFreezeFlags(existing);
-    if (flags.managed === false || flags.needsReview === false) {
-      const key = flags.managed === false ? "managed_by_janus" : "needs_review";
-      return {
-        ...base,
-        outcome: "frozen",
-        detail: `frozen by \`${key}: false\` — delete the file to hand it back to Janus`,
-      };
-    }
     // Positive ownership: anything without the key in a closed fence — including
     // a file with no frontmatter at all — is someone else's and is never
     // overwritten, by any flag.
@@ -475,4 +479,64 @@ export async function writeBoard(opts: {
   await Bun.write(tmp, markdown);
   await rename(tmp, path);
   return { ...base, outcome: "written", detail: "board written" };
+}
+
+// ─── Command-facing orchestration ───────────────────────────────────────────
+
+/** The guards that end in a refusal, as opposed to a write or a no-op. */
+const REFUSALS: readonly WriteOutcome[] = ["frozen", "not-ours", "degenerate", "invalid"];
+
+function verdict(result: WriteResult, dryRun: boolean): string {
+  if (REFUSALS.includes(result.outcome)) return `refused (${result.outcome}): ${result.detail}`;
+  if (result.outcome === "written") return dryRun ? "would write" : "written";
+  return result.outcome;
+}
+
+/**
+ * One line, always. A run that prints nothing when it declines to write is
+ * indistinguishable from a crash, and a refusal is only recoverable if the user
+ * is told which guard fired.
+ */
+export function formatKanvasResult(opts: {
+  result: WriteResult;
+  dryRun: boolean;
+  stateDir: string | undefined;
+  blockedOutcome: BlockerSourceOutcome;
+}): string {
+  const { result } = opts;
+  const prefix = opts.dryRun ? "dry-run — " : "";
+  // The state dir is named on every run because the blocker lane silently reads
+  // as empty when the verb runs from a directory whose state.db is elsewhere.
+  const state = opts.stateDir ?? "unset";
+  const stateNote = opts.blockedOutcome === "unreachable" ? " (no state.db — blocked lane unknown)" : "";
+  return (
+    `[kanvas] ${prefix}${verdict(result, opts.dryRun)}` +
+    ` · rendered ${result.rendered} · summarized ${result.summarized} · declined ${result.declined}` +
+    ` · state ${state}${stateNote} · board ${result.path}`
+  );
+}
+
+/** Build, write, and describe in one call — what both the verb and the nightly block need. */
+export async function runKanvas(opts: {
+  config: JanusConfig;
+  today: string;
+  dryRun?: boolean;
+  allowEmpty?: boolean;
+}): Promise<{ result: WriteResult; line: string }> {
+  const model = await buildBoardModel({ config: opts.config, today: opts.today });
+  const result = await writeBoard({
+    model,
+    vaultPath: opts.config.obsidianVault,
+    allowEmpty: opts.allowEmpty,
+    dryRun: opts.dryRun,
+  });
+  return {
+    result,
+    line: formatKanvasResult({
+      result,
+      dryRun: opts.dryRun ?? false,
+      stateDir: opts.config.stateDir,
+      blockedOutcome: model.blockedOutcome,
+    }),
+  };
 }

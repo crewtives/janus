@@ -3,9 +3,9 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import command, { runKanvas } from "../src/commands/kanvas.ts";
 import type { JanusConfig } from "../src/config/types.ts";
-import { boardPath } from "../src/core/kanvas.ts";
+import command from "../src/commands/kanvas.ts";
+import { boardPath, runKanvas } from "../src/core/kanvas.ts";
 
 const ROADMAP = `---
 type: roadmap

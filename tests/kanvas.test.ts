@@ -151,6 +151,22 @@ describe("collectProjectCards", () => {
     await cleanup();
   });
 
+  test("a reviewed pulse-inferred mirror becomes reconciled (flow F2)", async () => {
+    // The mirror Janus inferred, that the user then reviewed and froze, has been
+    // taken over by a human. Gating provenance on `source` as well as
+    // `needs_review` would strand it as inferred forever.
+    const reviewed = mirror({
+      needsReview: false,
+      source: "pulse-inference",
+      body: "## In progress\n\n- [ ] Reviewed by hand\n",
+    });
+    const { config, cleanup } = await setup([{ name: "alpha", roadmap: reviewed }]);
+    const result = await collectProjectCards({ config });
+    expect(result.projects[0]?.outcome).toBe("reconciled");
+    expect(result.cards[0]?.provenance).toBe("reconciled");
+    await cleanup();
+  });
+
   test("a pending placeholder mirror is no-source, not a source with zero cards", async () => {
     const pending = mirror({
       needsReview: true,
@@ -265,6 +281,7 @@ async function setupState(rows: Array<{ hash: string; project?: string; lastSeen
       sampleText: r.text,
     });
   }
+  cp.close();
   return { stateDir, cleanup: () => rm(dir, { recursive: true, force: true }) };
 }
 

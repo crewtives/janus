@@ -1,9 +1,9 @@
 import { existsSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { Checkpoint } from "./checkpoint.ts";
-import { readFreezeFlags, splitFrontmatter } from "./frontmatter.ts";
+import { Checkpoint, hasStateDb } from "./checkpoint.ts";
+import { describeFreeze, readInlineArray, splitFrontmatter } from "./frontmatter.ts";
 import { isRepo } from "./git.ts";
-import { boardPath, buildBoardModel } from "./kanvas.ts";
+import { activeBoardProjects, boardPath, buildBoardModel } from "./kanvas.ts";
 import { DEFAULT_LABEL } from "./init/launchd.ts";
 import { loadConfig } from "../config/loader.ts";
 import type { JanusConfig, ProjectConfig } from "../config/types.ts";
@@ -381,11 +381,8 @@ export async function checkKanvasBoard(config: JanusConfig, today: string): Prom
 
   const existing = existsSync(path) ? await Bun.file(path).text() : null;
   if (existing !== null) {
-    const flags = readFreezeFlags(existing);
-    if (flags.managed === false || flags.needsReview === false) {
-      const key = flags.managed === false ? "managed_by_janus" : "needs_review";
-      return { name, ok: true, detail: `frozen by \`${key}: false\` — delete the file to hand it back to Janus${note}` };
-    }
+    const freeze = describeFreeze(existing);
+    if (freeze) return { name, ok: true, detail: `${freeze.message}${note}` };
     // Partial is a normal state, not a failure: one unreadable mirror costs that
     // project's cards and the board says so in its own banner.
     const failed = readFailedProjects(existing);
@@ -418,26 +415,18 @@ export async function checkKanvasBoard(config: JanusConfig, today: string): Prom
  */
 function anyPulseRecorded(config: JanusConfig): boolean {
   const stateDir = config.stateDir;
-  if (!stateDir || !existsSync(join(stateDir, "state.db"))) return false;
-  const cp = Checkpoint.open(stateDir);
+  if (!hasStateDb(stateDir)) return false;
+  const cp = Checkpoint.open(stateDir!);
   try {
-    return boardProjects(config).some((p) => cp.lastDoneDate(p.name) !== null);
+    return activeBoardProjects(config).some((p) => cp.lastDoneDate(p.name) !== null);
   } finally {
     cp.close();
   }
 }
 
-/** Same filter as `collectProjectCards` in src/core/kanvas.ts: archived only. */
-function boardProjects(config: JanusConfig): ProjectConfig[] {
-  return config.projects.filter((p) => (p.status ?? "active") !== "archived");
-}
-
 /** `failed_projects: [...]` out of the board's own frontmatter block. */
 function readFailedProjects(md: string): string[] {
-  const { frontmatter } = splitFrontmatter(md);
-  const m = frontmatter.match(/^failed_projects:\s*\[(.*)\]\s*$/m);
-  if (!m) return [];
-  return m[1]!.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+  return readInlineArray(splitFrontmatter(md).frontmatter, "failed_projects");
 }
 
 /**

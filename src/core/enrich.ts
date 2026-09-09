@@ -263,6 +263,11 @@ async function enrichIndex(project: ProjectConfig, vaultRelPath: string, pulses:
     if (String(existingFm.managed_by_janus ?? "") === "false") return false;
   }
 
+  // The `[[Kanvas]]` link in the Links section below lands here, not only in the
+  // scaffolds, because of a real asymmetry: the hub, MOC and dashboard generators
+  // are all create-or-skip, so their links only ever reach a NEW vault. This writer
+  // regenerates `_index.md` on every run, so it is the only path by which an
+  // existing vault discovers the board.
   const content = `---
 type: project-index
 project: ${project.name}
@@ -328,7 +333,7 @@ LIMIT 14
 - Hub: [[${project.name}]]
 - [[_roadmap|Roadmap]] · [[STRATEGY|Strategy]]
 - MOCs: [[Projects MOC]] · [[Decisions MOC]] · [[Risks MOC]] · [[Weekly MOC]]
-- Dashboards: [[Janus Pulse|Global view]] · [[Open Risks]] · [[Drift]] · [[Inferring]]
+- Dashboards: [[Janus Pulse|Global view]] · [[Open Risks]] · [[Drift]] · [[Inferring]] · [[Kanvas]]
 `;
 
   await writeFile(target, content);
@@ -381,7 +386,9 @@ async function maybeRegenerateRoadmap(project: ProjectConfig, pulses: ParsedPuls
   const objective = draft.objective || "(not extracted from pulses — fill in manually)";
   const milestonesMd = draft.milestones.length > 0
     ? draft.milestones.map((m) => `- [ ] ${m}`).join("\n")
-    : "- [ ] (no milestones inferred — fill in)";
+    // Not a checkbox: the board reads `- [ ]` lines as work items, and a
+    // placeholder rendered as a card would claim work nobody planned.
+    : "- (no milestones inferred — fill in)";
   const backlogMd = draft.backlog.length > 0
     ? draft.backlog.map((b) => `- ${b}`).join("\n")
     : "- (no backlog inferred — fill in)";

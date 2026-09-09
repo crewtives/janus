@@ -246,7 +246,29 @@ bun janus discover [--apply]                 # find new git repos in discoverRoo
 bun janus archive-tracks [--ttl-weeks N]
 bun janus retry --from .janus/failed.jsonl   # replay dead-letter queue
 bun janus doctor                             # provider-aware diagnostics
+bun janus kanvas [--dry-run] [--allow-empty] # cross-project board -> Dashboards/Kanvas.md
 ```
+
+### The board (`janus kanvas`)
+
+One page in the vault showing the open work of every active project grouped by
+state, plus what a weekly last reported as blocking. It is deterministic — no
+model call — and it is a *view*: cards come from each project's `_roadmap.md`
+mirror, so the way to change the board is to change the roadmap.
+
+- **Columns** are `Now`, `Next`, `Blocked`, `Done`, derived from each mirror's
+  headings (English and Spanish) with an unrecognized heading landing in `Next`
+  rather than being dropped. Twelve cards per column; the rest are summarized by
+  count.
+- **The blocked lane is cross-project**, not per project, because that is how the
+  weekly rollup records blockers. It reports what a weekly last said, with the
+  date it said it — not verified current state.
+- **To take the board over**, set `managed_by_janus: false` in its frontmatter and
+  Janus stops touching it. To hand it back, delete the file; the next run
+  recreates it. A file at that path that Janus did not write is never
+  overwritten.
+- The board is **not** indexed into `janus ask` and is **not** exposed to agents
+  over MCP: it is volatile state rather than memory.
 
 ## Configuration
 

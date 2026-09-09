@@ -36,6 +36,11 @@ function aliasFor(project: string): string {
   return parts.slice(1).join("-");
 }
 
+// El link a [[Kanvas]] de la sección Dashboards solo alcanza vaults NUEVOS:
+// generateHubs es create-or-skip (saltea todo hub existente salvo `force`), así
+// que un vault ya scaffoldeado nunca gana el link por acá. El único generador
+// que reescribe su archivo en cada corrida — y por lo tanto llega a vaults
+// existentes — es el enrich pass sobre `_index.md`.
 function renderHub(project: ProjectConfig, vaultRelPath: string): string {
   const alias = aliasFor(project.name);
   return `---
@@ -92,7 +97,7 @@ LIMIT 10
 
 ## Dashboards
 
-- [[Janus Pulse|Vista global]] · [[Open Risks]] · [[Drift]] · [[Inferring]]
+- [[Janus Pulse|Vista global]] · [[Open Risks]] · [[Drift]] · [[Inferring]] · [[Kanvas]]
 `;
 }
 

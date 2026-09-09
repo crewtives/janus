@@ -32,6 +32,9 @@ function hubLinks(config: JanusConfig): string {
   return lines.join("\n");
 }
 
+// Mismo caveat que en hubs.ts: generateMocs es create-or-skip, así que el link a
+// [[Kanvas]] de estos MOCs solo aparece en vaults nuevos. En un vault existente
+// el tablero se descubre desde el `_index.md` que regenera el enrich pass.
 function buildFiles(config: JanusConfig): Array<{ name: string; content: string }> {
   return [
     {
@@ -58,7 +61,7 @@ ${hubLinks(config)}
 
 ## Dashboards relacionados
 
-- [[Janus Pulse|Vista global]] · [[Open Risks]] · [[Drift]] · [[Inferring]]
+- [[Janus Pulse|Vista global]] · [[Open Risks]] · [[Drift]] · [[Inferring]] · [[Kanvas]]
 
 ## MOCs relacionados
 
@@ -118,7 +121,7 @@ El comando crea un nuevo \`Decisions/ADR-NNN-<slug>.md\` con el contexto pre-lle
 
 ## Dashboards relacionados
 
-- [[Janus Pulse|Vista global]] · [[Open Risks]] · [[Drift]] · [[Inferring]]
+- [[Janus Pulse|Vista global]] · [[Open Risks]] · [[Drift]] · [[Inferring]] · [[Kanvas]]
 
 ## MOCs relacionados
 
@@ -145,7 +148,7 @@ SORT risks DESC, date DESC
 
 ## Dashboards relacionados
 
-- [[Janus Pulse|Vista global]] · [[Open Risks]] · [[Drift]] · [[Inferring]]
+- [[Janus Pulse|Vista global]] · [[Open Risks]] · [[Drift]] · [[Inferring]] · [[Kanvas]]
 
 ## MOCs relacionados
 
@@ -167,7 +170,7 @@ Tracks de trabajo cruzados detectados en weekly rollups.
 
 ## Dashboards relacionados
 
-- [[Janus Pulse|Vista global]] · [[Open Risks]] · [[Drift]] · [[Inferring]]
+- [[Janus Pulse|Vista global]] · [[Open Risks]] · [[Drift]] · [[Inferring]] · [[Kanvas]]
 
 ## MOCs relacionados
 
@@ -205,7 +208,7 @@ SORT month DESC
 
 ## Dashboards relacionados
 
-- [[Janus Pulse|Vista global]] · [[Open Risks]] · [[Drift]] · [[Inferring]]
+- [[Janus Pulse|Vista global]] · [[Open Risks]] · [[Drift]] · [[Inferring]] · [[Kanvas]]
 
 ## MOCs relacionados
 

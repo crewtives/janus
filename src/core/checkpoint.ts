@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 export type PulseStatus = "pending" | "in_progress" | "done" | "failed";
@@ -126,6 +126,18 @@ CREATE INDEX IF NOT EXISTS idx_track_lineage_project ON track_lineage(project);
 CREATE INDEX IF NOT EXISTS idx_decision_graph_adr ON decision_graph(adr_id);
 CREATE INDEX IF NOT EXISTS idx_decision_graph_project ON decision_graph(project);
 `;
+
+/**
+ * True when a state database already exists at `stateDir`.
+ *
+ * Callers that only want to READ must ask this first: `Checkpoint.open` calls
+ * `mkdirSync` and creates an empty database, so a run from the wrong working
+ * directory would otherwise read zero rows with no error to catch, and leave a
+ * stray database behind.
+ */
+export function hasStateDb(stateDir: string | undefined): boolean {
+  return stateDir !== undefined && existsSync(join(stateDir, "state.db"));
+}
 
 export class Checkpoint {
   private constructor(private readonly db: Database) {}

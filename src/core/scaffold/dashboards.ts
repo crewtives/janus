@@ -24,6 +24,11 @@ export interface GenerateDashboardsOptions {
   config?: JanusConfig;
 }
 
+// `Kanvas.md` NO va en esta lista, a propósito: este generador es create-or-skip
+// (deja intacto todo archivo que ya exista salvo `force`), y el tablero se
+// regenera entero en cada corrida desde su propio writer. Sumarlo acá lo
+// congelaría en su primera versión. Los links [[Kanvas]] de abajo son inbound —
+// y, como son create-or-skip, solo llegan a vaults nuevos.
 const FILES: Array<{ name: string; content: string }> = [
   {
     name: "Janus Pulse.md",
@@ -86,6 +91,7 @@ SORT count DESC
 - [[Open Risks]] — pulses con \`risks > 0\`
 - [[Drift]] — pulses con \`status = some-drift\`
 - [[Inferring]] — proyectos sin roadmap (status = inferring)
+- [[Kanvas]] — work items abiertos de todos los proyectos, por estado
 
 ## MOCs relacionados
 
@@ -145,7 +151,7 @@ SORT date DESC
 
 ## Atajos
 
-- [[Janus Pulse|Vista global]] · [[Drift]] · [[Inferring]]
+- [[Janus Pulse|Vista global]] · [[Drift]] · [[Inferring]] · [[Kanvas]]
 `,
   },
   {
@@ -171,7 +177,7 @@ SORT date DESC
 
 ## Atajos
 
-- [[Janus Pulse|Vista global]] · [[Open Risks]] · [[Inferring]]
+- [[Janus Pulse|Vista global]] · [[Open Risks]] · [[Inferring]] · [[Kanvas]]
 `,
   },
   {
@@ -200,7 +206,7 @@ Para cualquier proyecto que aparezca acá, abrí el pulse correspondiente, copi�
 
 ## Atajos
 
-- [[Janus Pulse|Vista global]] · [[Open Risks]] · [[Drift]]
+- [[Janus Pulse|Vista global]] · [[Open Risks]] · [[Drift]] · [[Kanvas]]
 `,
   },
 ];

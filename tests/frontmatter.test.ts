@@ -1,14 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import {
-  splitFrontmatter,
+  addTags,
+  describeFreeze,
+  getTags,
+  isFrozen,
   joinFrontmatter,
   prependFrontmatter,
-  getTags,
-  addTags,
-  setKey,
-  removeKey,
   readFreezeFlags,
-  isFrozen,
+  readInlineArray,
+  readScalar,
+  removeKey,
+  setKey,
+  splitFrontmatter,
 } from "../src/core/frontmatter.ts";
 
 // Real frontmatter shapes sampled from the vault (byte-for-byte).
@@ -172,5 +175,34 @@ describe("frontmatter — prependFrontmatter (R13 notes)", () => {
     // The original note (with its embedded HR) is preserved intact as the body.
     expect(s.body).toBe(`\n\n${NOTE}`);
     expect(out).toContain("More prose.");
+  });
+});
+
+describe("shared frontmatter readers", () => {
+  test("readInlineArray parses an inline flow array and returns [] when absent", () => {
+    const fm = "type: dashboard\nfailed_projects: [alpha, beta]\ntags: [type/dashboard]";
+    expect(readInlineArray(fm, "failed_projects")).toEqual(["alpha", "beta"]);
+    expect(readInlineArray(fm, "missing_key")).toEqual([]);
+    expect(readInlineArray("failed_projects: []", "failed_projects")).toEqual([]);
+  });
+
+  test("getTags still reads what it always did, now via readInlineArray", () => {
+    expect(getTags("tags: [a, b, c]")).toEqual(["a", "b", "c"]);
+    expect(getTags("no tags here")).toEqual([]);
+  });
+
+  test("readScalar returns the value, or null when the key is absent", () => {
+    const fm = "source: reconciled-vs-repo\ngenerated_at: 2026-09-09";
+    expect(readScalar(fm, "source")).toBe("reconciled-vs-repo");
+    expect(readScalar(fm, "generated_at")).toBe("2026-09-09");
+    expect(readScalar(fm, "absent")).toBeNull();
+  });
+
+  test("describeFreeze names the key that froze a note, and only reads frontmatter", () => {
+    expect(describeFreeze("---\nmanaged_by_janus: false\n---\n\nbody\n")?.key).toBe("managed_by_janus");
+    expect(describeFreeze("---\nneeds_review: false\n---\n\nbody\n")?.key).toBe("needs_review");
+    expect(describeFreeze("---\nmanaged_by_janus: true\n---\n\nbody\n")).toBeNull();
+    // Body prose must never freeze a note (R19).
+    expect(describeFreeze("---\ntype: x\n---\n\nneeds_review: false\n")).toBeNull();
   });
 });

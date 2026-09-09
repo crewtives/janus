@@ -54,13 +54,33 @@ export function prependFrontmatter(lines: string[], body: string): string {
   return `${OPEN}${lines.join("\n")}\n---\n\n${body}`;
 }
 
-const TAGS_RE = /^tags:\s*\[(.*)\]\s*$/m;
+/** `key: [a, b]` on one line. Shared so the readers and the editor cannot drift. */
+function inlineArrayRe(key: string): RegExp {
+  return new RegExp(`^${key}:\\s*\\[(.*)\\]\\s*$`, "m");
+}
+
+const TAGS_RE = inlineArrayRe("tags");
+
+/**
+ * Parse an inline flow array (`key: [a, b]`) from a frontmatter text ([] if
+ * absent). Inline flow only, matching the vault reality this module is
+ * calibrated to — a block-style list is not read.
+ */
+export function readInlineArray(frontmatter: string, key: string): string[] {
+  const m = frontmatter.match(inlineArrayRe(key));
+  if (!m) return [];
+  return m[1]!.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+}
+
+/** Read a single scalar (`key: value`) from a frontmatter text. */
+export function readScalar(frontmatter: string, key: string): string | null {
+  const m = frontmatter.match(new RegExp(`^${key}:\\s*(\\S.*?)\\s*$`, "m"));
+  return m ? m[1]! : null;
+}
 
 /** Parse the inline `tags: [...]` array from a frontmatter text ([] if absent). */
 export function getTags(frontmatter: string): string[] {
-  const m = frontmatter.match(TAGS_RE);
-  if (!m) return [];
-  return m[1]!.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+  return readInlineArray(frontmatter, "tags");
 }
 
 /**
@@ -132,4 +152,16 @@ export function readFreezeFlags(content: string): { managed: boolean | null; nee
 export function isFrozen(content: string): boolean {
   const f = readFreezeFlags(content);
   return f.managed === false || f.needsReview === false;
+}
+
+/**
+ * Which key froze a note, and the sentence to show the user. Both the vault
+ * writers and `doctor` report freezes, and a caller that re-derives the key
+ * ternary drifts from the other one the first time the wording changes.
+ */
+export function describeFreeze(content: string): { key: string; message: string } | null {
+  const f = readFreezeFlags(content);
+  if (f.managed !== false && f.needsReview !== false) return null;
+  const key = f.managed === false ? "managed_by_janus" : "needs_review";
+  return { key, message: `frozen by \`${key}: false\` — delete the file to hand it back to Janus` };
 }

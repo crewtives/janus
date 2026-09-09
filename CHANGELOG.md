@@ -4,6 +4,27 @@ All notable changes to Janus are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+### Added
+
+- `janus kanvas` — one page in the vault with the open work of every active project,
+  grouped by state, plus what a weekly last reported as blocking. It refreshes at the
+  end of every nightly run, including the quiet ones, and skips runs that are replaying
+  history. `doctor` reports a missing board and stays green for anyone who has not
+  adopted it.
+
+  The cards come from the `_roadmap.md` mirrors Janus already maintains, not from
+  probing each repo: measured against the real projects, the repo-side roadmaps carry
+  prose headings and status tables rather than checkbox lines, so that board would have
+  rendered empty on day one. The mirror also already records whether a roadmap was
+  reconciled against its repo or inferred from a pulse, which is the distinction the
+  board needs anyway.
+
+  The blocked lane is cross-project because that is how blockers are recorded, and it
+  says so on its face. Everywhere the board cannot read an input it prints unknown, not
+  zero. Five guards stand between the generator and your vault, which is not a git repo
+  and has no backup: a board you froze, a file Janus did not write, an empty model over
+  an existing board, output that does not validate, and bytes that already match.
+
 ## [0.4.0] — 2026-07-15
 
 A pulse was generated complete and well-formed, and thrown away because the model prefixed it with a

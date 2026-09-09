@@ -3,7 +3,8 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { JanusConfig, ProjectConfig } from "../src/config/types.ts";
-import { collectProjectCards, normalizeColumn } from "../src/core/kanvas.ts";
+import { Checkpoint } from "../src/core/checkpoint.ts";
+import { buildBoardModel, collectProjectCards, normalizeColumn } from "../src/core/kanvas.ts";
 
 interface FixtureProject {
   name: string;
@@ -232,6 +233,156 @@ describe("collectProjectCards", () => {
     const { config, cleanup } = await setup([{ name: "alpha", roadmap: degenerate }]);
     const result = await collectProjectCards({ config });
     expect(result.cards.map((c) => c.title)).toEqual(["Orphan before any heading", "Indented item"]);
+    await cleanup();
+  });
+});
+
+// ─── U7: cross-project blocked lane and model assembly ──────────────────────
+
+async function setupState(rows: Array<{ hash: string; project?: string; lastSeen: string; text: string }>): Promise<{
+  stateDir: string;
+  cleanup: () => Promise<void>;
+}> {
+  const dir = await mkdtemp(join(tmpdir(), "janus-kanvas-state-"));
+  const stateDir = join(dir, ".janus");
+  const cp = Checkpoint.open(stateDir);
+  for (const r of rows) {
+    cp.recordBlockerOccurrence({
+      blockerHash: r.hash,
+      project: r.project ?? "_global",
+      weeklyEndDate: r.lastSeen,
+      sampleText: r.text,
+    });
+  }
+  return { stateDir, cleanup: () => rm(dir, { recursive: true, force: true }) };
+}
+
+describe("buildBoardModel — blocked lane", () => {
+  test("rows inside the window appear; rows outside are declined", async () => {
+    const { config, cleanup } = await setup([{ name: "alpha", roadmap: RECONCILED }]);
+    const state = await setupState([
+      { hash: "aaa", lastSeen: "2026-09-06", text: "fresh blocker" },
+      { hash: "bbb", lastSeen: "2026-05-24", text: "ancient blocker" },
+    ]);
+    const model = await buildBoardModel({
+      config: { ...config, stateDir: state.stateDir },
+      today: "2026-09-09",
+    });
+    expect(model.blocked.map((b) => b.text)).toEqual(["fresh blocker"]);
+    expect(model.declined).toBe(1);
+    expect(model.blockedOutcome).toBe("ok");
+    await state.cleanup();
+    await cleanup();
+  });
+
+  test("an absent state database is unreachable, not an empty lane", async () => {
+    const { config, cleanup } = await setup([{ name: "alpha", roadmap: RECONCILED }]);
+    const dir = await mkdtemp(join(tmpdir(), "janus-kanvas-nostate-"));
+    const model = await buildBoardModel({
+      config: { ...config, stateDir: join(dir, "does-not-exist") },
+      today: "2026-09-09",
+    });
+    expect(model.blockedOutcome).toBe("unreachable");
+    expect(model.partial).toBe(true);
+    expect(model.blocked).toHaveLength(0);
+    await rm(dir, { recursive: true, force: true });
+    await cleanup();
+  });
+
+  test("rows exist but none in window reads as unknown, not empty", async () => {
+    const { config, cleanup } = await setup([{ name: "alpha", roadmap: RECONCILED }]);
+    const state = await setupState([{ hash: "old", lastSeen: "2026-01-01", text: "stale" }]);
+    const model = await buildBoardModel({
+      config: { ...config, stateDir: state.stateDir },
+      today: "2026-09-09",
+    });
+    expect(model.blockedOutcome).toBe("no-weekly-in-window");
+    expect(model.blocked).toHaveLength(0);
+    await state.cleanup();
+    await cleanup();
+  });
+
+  test("an empty blocker table also reads as unknown", async () => {
+    const { config, cleanup } = await setup([{ name: "alpha", roadmap: RECONCILED }]);
+    const state = await setupState([]);
+    const model = await buildBoardModel({
+      config: { ...config, stateDir: state.stateDir },
+      today: "2026-09-09",
+    });
+    expect(model.blockedOutcome).toBe("no-weekly-in-window");
+    await state.cleanup();
+    await cleanup();
+  });
+
+  test("rows carrying a project key that matches no configured project still appear", async () => {
+    const { config, cleanup } = await setup([{ name: "alpha", roadmap: RECONCILED }]);
+    const state = await setupState([
+      { hash: "ccc", project: "_global", lastSeen: "2026-09-06", text: "sentinel row" },
+      { hash: "ddd", project: "renamed-away", lastSeen: "2026-09-06", text: "orphan row" },
+    ]);
+    const model = await buildBoardModel({
+      config: { ...config, stateDir: state.stateDir },
+      today: "2026-09-09",
+    });
+    expect(model.blocked.map((b) => b.text).sort()).toEqual(["orphan row", "sentinel row"]);
+    await state.cleanup();
+    await cleanup();
+  });
+
+  test("entries sharing last_seen order deterministically across reopens", async () => {
+    const { config, cleanup } = await setup([{ name: "alpha", roadmap: RECONCILED }]);
+    const state = await setupState([
+      { hash: "zzz", lastSeen: "2026-09-06", text: "z blocker" },
+      { hash: "aaa", lastSeen: "2026-09-06", text: "a blocker" },
+      { hash: "mmm", lastSeen: "2026-09-06", text: "m blocker" },
+    ]);
+    const opts = { config: { ...config, stateDir: state.stateDir }, today: "2026-09-09" };
+    const first = await buildBoardModel(opts);
+    const second = await buildBoardModel(opts);
+    expect(first.blocked.map((b) => b.id)).toEqual(["aaa", "mmm", "zzz"]);
+    expect(second.blocked.map((b) => b.id)).toEqual(first.blocked.map((b) => b.id));
+    await state.cleanup();
+    await cleanup();
+  });
+
+  test("building twice from unchanged inputs yields an identical model", async () => {
+    const { config, cleanup } = await setup([
+      { name: "alpha", roadmap: RECONCILED },
+      { name: "beta", roadmap: RECONCILED },
+    ]);
+    const state = await setupState([{ hash: "eee", lastSeen: "2026-09-06", text: "b" }]);
+    const opts = { config: { ...config, stateDir: state.stateDir }, today: "2026-09-09" };
+    const a = await buildBoardModel(opts);
+    const b = await buildBoardModel(opts);
+    expect(JSON.stringify(a)).toBe(JSON.stringify(b));
+    await state.cleanup();
+    await cleanup();
+  });
+
+  test("an unreadable project marks the model partial", async () => {
+    const { config, cleanup } = await setup([
+      { name: "alpha", roadmap: null, roadmapIsDir: true },
+      { name: "beta", roadmap: RECONCILED },
+    ]);
+    const state = await setupState([{ hash: "fff", lastSeen: "2026-09-06", text: "b" }]);
+    const model = await buildBoardModel({
+      config: { ...config, stateDir: state.stateDir },
+      today: "2026-09-09",
+    });
+    expect(model.partial).toBe(true);
+    await state.cleanup();
+    await cleanup();
+  });
+
+  test("a fully readable board is not partial", async () => {
+    const { config, cleanup } = await setup([{ name: "alpha", roadmap: RECONCILED }]);
+    const state = await setupState([{ hash: "ggg", lastSeen: "2026-09-06", text: "b" }]);
+    const model = await buildBoardModel({
+      config: { ...config, stateDir: state.stateDir },
+      today: "2026-09-09",
+    });
+    expect(model.partial).toBe(false);
+    await state.cleanup();
     await cleanup();
   });
 });

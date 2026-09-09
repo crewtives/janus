@@ -12,8 +12,10 @@
  * this module would otherwise have to invent — `needs_review` and `source` say
  * whether a roadmap was reconciled against the repo or inferred from a pulse.
  */
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { JanusConfig } from "../config/types.ts";
+import { Checkpoint } from "./checkpoint.ts";
 import { readIfExists, roadmapPath } from "./obsidian.ts";
 import { readFreezeFlags, splitFrontmatter } from "./frontmatter.ts";
 
@@ -156,4 +158,106 @@ export async function collectProjectCards(opts: { config: JanusConfig }): Promis
 /** Vault-relative location of the board. `Dashboards/` is already graph-filtered. */
 export function boardPath(vaultPath: string): string {
   return join(vaultPath, "Dashboards", "Kanvas.md");
+}
+
+// ─── Blocked lane and model assembly ────────────────────────────────────────
+
+/**
+ * The lane is deliberately cross-project. Every row the weekly rollup writes
+ * carries one non-project sentinel key, because the weekly is itself
+ * cross-project and names the project inline in the blocker prose. Partitioning
+ * by project would therefore discard every existing row; labelling the lane for
+ * what the data actually is costs nothing and claims nothing false.
+ */
+export type BlockerSourceOutcome = "ok" | "no-weekly-in-window" | "unreachable";
+
+export interface BlockedEntry {
+  /** The blocker hash. Project-free, because the rows are. */
+  id: string;
+  text: string;
+  /** Weekly end date, not a wall-clock observation. */
+  lastSeen: string;
+  weeklyCount: number;
+}
+
+export interface BoardModel {
+  today: string;
+  cards: BoardCard[];
+  projects: ProjectState[];
+  blocked: BlockedEntry[];
+  blockedOutcome: BlockerSourceOutcome;
+  /** True when any input failed, so the renderer can refuse to claim complete counts. */
+  partial: boolean;
+  /** Blocker rows outside the window — reported, never folded into the card counts. */
+  declined: number;
+}
+
+/** Four weekly periods. Below two the lane would flicker empty between rollups. */
+const DEFAULT_WINDOW_DAYS = 28;
+
+function daysBefore(date: string, days: number): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
+function readBlocked(
+  stateDir: string | undefined,
+  today: string,
+  windowDays: number,
+): { entries: BlockedEntry[]; outcome: BlockerSourceOutcome; declined: number } {
+  // Opening a missing state dir would silently create an empty database, so the
+  // file has to be checked before the handle is opened — there is no error to catch.
+  if (!stateDir || !existsSync(join(stateDir, "state.db"))) {
+    return { entries: [], outcome: "unreachable", declined: 0 };
+  }
+  const cutoff = daysBefore(today, windowDays);
+  const cp = Checkpoint.open(stateDir);
+  try {
+    const rows = cp.listBlockerHistory();
+    const inWindow = rows.filter((r) => r.lastSeen >= cutoff);
+    // `weekly_count` only advances when a later weekly restates a blocker in
+    // identical normalized text, so in practice every row sits at one. Ordering
+    // by it would be ordering by a constant; the hash tie-break is what makes
+    // the render byte-stable across a database reopen.
+    inWindow.sort((a, b) =>
+      a.lastSeen === b.lastSeen ? a.blockerHash.localeCompare(b.blockerHash) : b.lastSeen.localeCompare(a.lastSeen),
+    );
+    const entries = inWindow.map((r) => ({
+      id: r.blockerHash,
+      text: r.sampleText,
+      lastSeen: r.lastSeen,
+      weeklyCount: r.weeklyCount,
+    }));
+    return {
+      entries,
+      outcome: entries.length === 0 ? "no-weekly-in-window" : "ok",
+      declined: rows.length - inWindow.length,
+    };
+  } finally {
+    cp.close();
+  }
+}
+
+/**
+ * Build the whole board model. Deterministic: `today` is injected, never read
+ * from the clock, so the recency window and the rendered bytes are reproducible.
+ */
+export async function buildBoardModel(opts: {
+  config: JanusConfig;
+  today: string;
+  windowDays?: number;
+}): Promise<BoardModel> {
+  const { cards, projects } = await collectProjectCards({ config: opts.config });
+  const blocked = readBlocked(opts.config.stateDir, opts.today, opts.windowDays ?? DEFAULT_WINDOW_DAYS);
+  const partial = projects.some((p) => p.outcome === "unreadable") || blocked.outcome === "unreachable";
+  return {
+    today: opts.today,
+    cards,
+    projects,
+    blocked: blocked.entries,
+    blockedOutcome: blocked.outcome,
+    partial,
+    declined: blocked.declined,
+  };
 }

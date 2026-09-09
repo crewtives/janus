@@ -4,6 +4,16 @@ All notable changes to Janus are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.5.1] — 2026-09-09
+
+### Fixed
+
+- The board's per-column cap took the first cards in configuration order, so the projects
+  listed last lost every card the moment a column went over the cap. Registering a new
+  project made its cards invisible on a board that still had room — the failure a board
+  whose whole claim is "everything at once" cannot have. The cap now takes one card per
+  project in rotation, preserving each project's own order so the render stays byte-stable.
+
 ## [0.5.0] — 2026-09-09
 
 Janus knew nine projects and there was nowhere to see them at once. Its four dashboards are all

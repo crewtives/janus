@@ -4,6 +4,15 @@ All notable changes to Janus are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.5.4] — 2026-09-09
+
+### Fixed
+
+- Card provenance read `needs_review`, which records whether Janus still refreshes a file —
+  not whether Janus guessed its contents. The roadmap sync stamps it on repo mirrors too, so
+  work a maintainer wrote by hand in their own repo was rendered as inferred. Only a
+  pulse-derived mirror is inferred now, and only until `needs_review: false` claims it.
+
 ## [0.5.3] — 2026-09-09
 
 ### Added

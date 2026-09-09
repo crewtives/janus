@@ -301,6 +301,34 @@ export interface RenderResult {
   summarized: number;
 }
 
+/** How much of a card title a cell shows before it becomes unscannable. */
+const CELL_CHARS = 88;
+
+/**
+ * A card title, reduced to a scannable label.
+ *
+ * Roadmap items are written as full sentences with their rationale — measured on
+ * a real vault, the median cell ran 177 characters and the longest 459, which
+ * reads as a dense table rather than a board. The full text is not lost: the
+ * project's `_roadmap.md` is the source and still carries it.
+ *
+ * Inline formatting is stripped rather than preserved, because truncating can
+ * cut a code span or a bold run in half and leave the marker unbalanced, which
+ * corrupts every cell after it in the row.
+ */
+function cellLabel(title: string): string {
+  const plain = title
+    .replace(/`/g, "")
+    .replace(/\*\*/g, "")
+    .replace(/(^|\s)[_*](\S)/g, "$1$2")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (plain.length <= CELL_CHARS) return escapeCell(plain);
+  const cut = plain.slice(0, CELL_CHARS);
+  const lastSpace = cut.lastIndexOf(" ");
+  return `${escapeCell((lastSpace > CELL_CHARS * 0.6 ? cut.slice(0, lastSpace) : cut).trimEnd())}…`;
+}
+
 function escapeCell(text: string): string {
   return text.replace(/\|/g, "\\|");
 }
@@ -394,7 +422,7 @@ export function renderBoard(model: BoardModel): RenderResult {
       const card = shown.get(c)![i];
       if (!card) return "";
       const mark = card.provenance === "inferred" ? " _(inferred)_" : "";
-      return `${escapeCell(card.title)} — ${card.project}${mark}`;
+      return `${cellLabel(card.title)} — ${card.project}${mark}`;
     });
     out.push(`| ${cells.join(" | ")} |`);
   }

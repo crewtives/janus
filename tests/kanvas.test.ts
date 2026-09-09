@@ -873,3 +873,46 @@ describe("column cap fairness", () => {
     expect(renderBoard(model).markdown).toBe(renderBoard(model).markdown);
   });
 });
+
+describe("cell labels", () => {
+  test("a short title is untouched", () => {
+    const model = emptyModel();
+    model.cards.push({ id: "alpha/a", project: "alpha", title: "Wire the board route", column: "now", provenance: "reconciled" });
+    expect(renderBoard(model).markdown).toContain("Wire the board route — alpha");
+  });
+
+  test("a long title is cut at a word boundary with an ellipsis", () => {
+    const long = "Confirm which build the impression measured against the give-up fix, then reconcile it with the debt table before touching anything else";
+    const model = emptyModel();
+    model.cards.push({ id: "alpha/l", project: "alpha", title: long, column: "now", provenance: "reconciled" });
+    const md = renderBoard(model).markdown;
+    const cell = md.split("\n").find((l) => l.includes("— alpha"))!;
+    expect(cell).toContain("…");
+    expect(cell.length).toBeLessThan(long.length);
+    // The kept prefix must end where a space was in the original — never mid-word.
+    const kept = cell.slice(cell.indexOf("|") + 2, cell.indexOf("…"));
+    expect(long.startsWith(kept)).toBe(true);
+    expect(long[kept.length]).toBe(" ");
+  });
+
+  test("truncation never leaves an unbalanced code span or bold run", () => {
+    // Cutting inside `code` or **bold** would corrupt every later cell in the row.
+    const model = emptyModel();
+    model.cards.push({
+      id: "alpha/f",
+      project: "alpha",
+      title: "Update `openapi/v1/openapi.yaml` with **Briefs** and Credentials because the spec has no path or schema for either of them yet",
+      column: "now",
+      provenance: "reconciled",
+    });
+    const cell = renderBoard(model).markdown.split("\n").find((l) => l.includes("— alpha"))!;
+    expect((cell.match(/`/g) ?? []).length % 2).toBe(0);
+    expect(cell).not.toContain("**");
+  });
+
+  test("a pipe in a title still cannot break the table", () => {
+    const model = emptyModel();
+    model.cards.push({ id: "alpha/p", project: "alpha", title: "a | b", column: "now", provenance: "reconciled" });
+    expect(renderBoard(model).markdown).toContain("a \\| b");
+  });
+});

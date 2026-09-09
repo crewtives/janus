@@ -4,6 +4,21 @@ All notable changes to Janus are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.5.3] — 2026-09-09
+
+### Added
+
+- `janus kanvas --project <name>` writes that project's own board into its vault folder, beside
+  its spine and roadmap. The shared board is untouched, and the nightly run keeps writing only
+  the cross-project one. The blocked lane is omitted there: its rows carry no project, so on a
+  one-project board they would all be someone else's.
+
+### Fixed
+
+- Truncating a cell in 0.5.2 stripped the backticks protecting an identifier like `SIGNUP_URL`,
+  leaving a bare underscore that opened an italics run to the next one and swallowed the rest of
+  the cell. Underscores and asterisks are now escaped — in a label they are literal text.
+
 ## [0.5.2] — 2026-09-09
 
 ### Fixed

@@ -4,6 +4,17 @@ All notable changes to Janus are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.5.2] — 2026-09-09
+
+### Fixed
+
+- Board cells rendered the whole roadmap item. Measured on a real vault that is a median of
+  177 characters and a maximum of 459, because roadmap items are written as sentences with
+  their rationale — the result reads as a dense table rather than a board. Cells are now cut
+  to a scannable label at a word boundary; the project's `_roadmap.md` still carries the full
+  text. Inline formatting is stripped first, since truncating mid-code-span left an unbalanced
+  marker that corrupted the rest of the row.
+
 ## [0.5.1] — 2026-09-09
 
 ### Fixed

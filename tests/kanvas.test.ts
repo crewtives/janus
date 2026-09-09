@@ -1019,3 +1019,34 @@ describe("scoped board honesty", () => {
     await cleanup();
   });
 });
+
+describe("provenance answers who wrote it", () => {
+  test("a mirror of a repo roadmap is authored, even while Janus keeps refreshing it", async () => {
+    // `needs_review: true` means "Janus still refreshes this", not "Janus guessed
+    // it" — the roadmap sync stamps it on repo mirrors too. Reading that flag
+    // alone labelled the user's own repo file as inferred.
+    const fromRepo = mirror({
+      needsReview: true,
+      source: "repo:ROADMAP.md",
+      body: "## In progress\n\n- [ ] Written by hand in the repo\n",
+    });
+    const { config, cleanup } = await setup([{ name: "alpha", roadmap: fromRepo }]);
+    const result = await collectProjectCards({ config });
+    expect(result.projects[0]?.outcome).toBe("reconciled");
+    expect(result.cards[0]?.provenance).toBe("reconciled");
+    await cleanup();
+  });
+
+  test("a pulse-derived mirror stays inferred until the user claims it", async () => {
+    const guessed = (needsReview: boolean) =>
+      mirror({ needsReview, source: "pulse-inference", body: "## In progress\n\n- [ ] Guessed\n" });
+
+    const a = await setup([{ name: "alpha", roadmap: guessed(true) }]);
+    expect((await collectProjectCards({ config: a.config })).cards[0]?.provenance).toBe("inferred");
+    await a.cleanup();
+
+    const b = await setup([{ name: "beta", roadmap: guessed(false) }]);
+    expect((await collectProjectCards({ config: b.config })).cards[0]?.provenance).toBe("reconciled");
+    await b.cleanup();
+  });
+});

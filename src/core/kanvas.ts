@@ -151,13 +151,17 @@ export async function collectProjectCards(opts: { config: JanusConfig }): Promis
         projects.push({ project: name, outcome: "no-mirror" });
         continue;
       }
-      // Provenance follows `needs_review` alone: a mirror Janus inferred and the
-      // user then reviewed has been taken over by a human, whatever wrote it
-      // first. Gating on `source` too would strand a pulse-inferred mirror as
-      // "inferred" forever, and would treat the two pulse-derived source values
-      // differently for no reason.
+      // Provenance answers "who wrote this", which is not what `needs_review`
+      // records — that flag means "Janus still refreshes this file", and the
+      // roadmap sync stamps it `true` on a repo mirror too. Reading it alone
+      // labelled work the user wrote in their own repo as inferred.
+      //
+      // So: only a pulse-derived mirror is inferred, and only until the user
+      // claims it by setting `needs_review: false`. A mirror of a repo file is
+      // authored by definition — the repo is the upstream source of truth.
       const { needsReview } = readFreezeFlags(content);
-      const provenance: CardProvenance = needsReview === false ? "reconciled" : "inferred";
+      const guessed = source !== null && /^pulse-/.test(source);
+      const provenance: CardProvenance = guessed && needsReview !== false ? "inferred" : "reconciled";
       const parsed = parseCards(body, name, provenance);
       if (parsed.length === 0) {
         projects.push({ project: name, outcome: "unparsed" });

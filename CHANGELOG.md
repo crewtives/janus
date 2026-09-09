@@ -4,6 +4,13 @@ All notable changes to Janus are recorded here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-09-09
+
+Janus knew nine projects and there was nowhere to see them at once. Its four dashboards are all
+pulse-shaped — last pulse, pulses with risks, drift, projects with no roadmap — and none of them
+answers the only question you ask on a Monday: what is open, everywhere, right now. A per-repo
+tracker structurally cannot answer it either, which is the whole reason this exists.
+
 ### Added
 
 - `janus kanvas` — one page in the vault with the open work of every active project,

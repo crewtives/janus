@@ -276,6 +276,44 @@ export async function runPulse(opts: RunPulseOptions): Promise<void> {
       console.warn(`[janus] weekly auto-trigger failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`);
     }
   }
+
+  // Kanvas (U4). Outside the success gate above on purpose: the board is
+  // current state assembled from the roadmap mirrors and the weekly blocker
+  // rows, so it has to refresh on a night where every project was idle, already
+  // done, or failed — the nights it is most worth reading. Last in the run, so a
+  // weekly generated moments ago has already written its blocker rows.
+  await refreshBoard({ config, opts, today: formatDate(new Date()) });
+}
+
+/**
+ * Refresh the cross-project board, once per run.
+ *
+ * Gated on the run's SHAPE, never on its dates: the scheduled job runs the bare
+ * verb, for which `determineDates` answers `[yesterday]` — the same day every
+ * replay path also ends on — so no date comparison can tell a nightly run from
+ * a backfill. `--date`/`--since`/`--backfill` name history explicitly, and
+ * replaying history must not rewrite a current-state artifact.
+ *
+ * `--force` is deliberately absent from the gate, unlike in `shouldCatchUp`:
+ * there it is excluded because it would rewrite pulses the user never named,
+ * and `writePulse` keeps no backup. A bare `--force` run is still today's run,
+ * and the board is regenerated whole on every run anyway.
+ */
+export async function refreshBoard(args: {
+  config: JanusConfig;
+  opts: RunPulseOptions;
+  today: string;
+}): Promise<void> {
+  const { config, opts, today } = args;
+  if (opts.dryRun || opts.date || opts.since || opts.backfill) return;
+  try {
+    const { buildBoardModel, writeBoard } = await import("../core/kanvas.ts");
+    const model = await buildBoardModel({ config, today });
+    const r = await writeBoard({ model, vaultPath: config.obsidianVault });
+    console.log(`[janus] kanvas ${r.outcome}: ${r.path} — ${r.detail} (${r.rendered} cards)`);
+  } catch (err) {
+    console.warn(`[janus] kanvas failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
 export async function runRetry(opts: { from: string; force?: boolean | undefined }): Promise<void> {

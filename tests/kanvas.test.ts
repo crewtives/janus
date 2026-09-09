@@ -12,9 +12,12 @@ import {
   buildBoardModel,
   collectProjectCards,
   normalizeColumn,
+  canvasPath,
   projectBoardPath,
   renderBoard,
+  renderCanvas,
   validateBoard,
+  validateCanvas,
   writeBoard,
 } from "../src/core/kanvas.ts";
 
@@ -1048,5 +1051,98 @@ describe("provenance answers who wrote it", () => {
     const b = await setup([{ name: "beta", roadmap: guessed(false) }]);
     expect((await collectProjectCards({ config: b.config })).cards[0]?.provenance).toBe("reconciled");
     await b.cleanup();
+  });
+});
+
+describe("canvas renderer", () => {
+  function canvasModel(): BoardModel {
+    const m = emptyModel();
+    const spread: Array<[string, "now" | "next" | "done"]> = [
+      ["a", "now"], ["b", "now"], ["c", "next"], ["d", "done"],
+    ];
+    for (const [t, col] of spread) {
+      m.cards.push({ id: `alpha/${t}`, project: "alpha", title: `card ${t}`, column: col, provenance: "reconciled" });
+    }
+    return m;
+  }
+
+  test("emits valid JSON Canvas with a node per card plus one group per column", () => {
+    const raw = renderCanvas(canvasModel());
+    const doc = JSON.parse(raw) as { nodes: Array<Record<string, unknown>>; edges: unknown[] };
+    expect(Array.isArray(doc.edges)).toBe(true);
+    expect(doc.nodes.filter((n) => n.type === "group")).toHaveLength(4);
+    expect(doc.nodes.filter((n) => n.type === "text")).toHaveLength(4);
+    for (const n of doc.nodes) {
+      for (const k of ["id", "type", "x", "y", "width", "height"]) expect(n[k]).toBeDefined();
+      expect(Number.isInteger(n.x)).toBe(true);
+      expect(Number.isInteger(n.y)).toBe(true);
+    }
+  });
+
+  test("every card box sits inside its column's group box", () => {
+    // Containment in this format is geometric, never declared: a card belongs to
+    // a column only because its box is inside the column's box. Move one without
+    // the other and the board still parses while looking wrong.
+    const doc = JSON.parse(renderCanvas(canvasModel())) as {
+      nodes: Array<{ type: string; label?: string; x: number; y: number; width: number; height: number }>;
+    };
+    const groups = doc.nodes.filter((n) => n.type === "group");
+    for (const card of doc.nodes.filter((n) => n.type === "text")) {
+      const owner = groups.find(
+        (g) =>
+          card.x >= g.x &&
+          card.y >= g.y &&
+          card.x + card.width <= g.x + g.width &&
+          card.y + card.height <= g.y + g.height,
+      );
+      expect(owner).toBeDefined();
+    }
+  });
+
+  test("node ids are unique and stable across renders", () => {
+    const model = canvasModel();
+    const first = JSON.parse(renderCanvas(model)) as { nodes: Array<{ id: string }> };
+    const ids = first.nodes.map((n) => n.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(renderCanvas(model)).toBe(renderCanvas(model));
+  });
+
+  test("validation catches a canvas that is not ours or not parseable", () => {
+    expect(validateCanvas(renderCanvas(canvasModel()))).toBeNull();
+    expect(validateCanvas("{not json")).toContain("JSON");
+    expect(validateCanvas(JSON.stringify({ nodes: [] }))).toContain("janusManaged");
+    expect(validateCanvas(JSON.stringify({ janusManaged: true }))).toContain("nodes");
+  });
+
+  test("someone else's canvas at that path is never overwritten", async () => {
+    const { config, cleanup } = await setup([{ name: "alpha", roadmap: RECONCILED }]);
+    const model = await buildBoardModel({ config, today: "2026-09-09" });
+    const alpha = config.projects[0]!;
+    const target = canvasPath(projectBoardPath(alpha.obsidianPath, "alpha"));
+    const mine = JSON.stringify({ nodes: [{ id: "x", type: "text", text: "mío", x: 0, y: 0, width: 1, height: 1 }] });
+    await writeFile(target, mine);
+    const r = await writeBoard({
+      model,
+      vaultPath: config.obsidianVault,
+      scope: { project: "alpha", obsidianPath: alpha.obsidianPath },
+      canvas: true,
+    });
+    expect(r.outcome).toBe("not-ours");
+    expect(await Bun.file(target).text()).toBe(mine);
+    await cleanup();
+  });
+
+  test("the canvas and the markdown board are separate files", async () => {
+    const { config, cleanup } = await setup([{ name: "alpha", roadmap: RECONCILED }]);
+    const model = await buildBoardModel({ config, today: "2026-09-09" });
+    const alpha = config.projects[0]!;
+    const scope = { project: "alpha", obsidianPath: alpha.obsidianPath };
+    const md = await writeBoard({ model, vaultPath: config.obsidianVault, scope });
+    const cv = await writeBoard({ model, vaultPath: config.obsidianVault, scope, canvas: true });
+    expect(md.path.endsWith(".md")).toBe(true);
+    expect(cv.path.endsWith(".canvas")).toBe(true);
+    expect(existsSync(md.path)).toBe(true);
+    expect(existsSync(cv.path)).toBe(true);
+    await cleanup();
   });
 });

@@ -16,6 +16,11 @@ export default defineCommand({
       type: "string",
       description: "Render only this project, into its own vault folder (the shared board is untouched)",
     },
+    canvas: {
+      type: "boolean",
+      description: "Write Obsidian's visual board (.canvas) instead of the markdown table",
+      default: false,
+    },
     "allow-empty": {
       // Not --force: that flag means "reprocess even if already done" everywhere
       // else in Janus, a non-destructive override. This one can wipe a board.
@@ -33,6 +38,7 @@ export default defineCommand({
       dryRun: args["dry-run"],
       allowEmpty: args["allow-empty"],
       project: args.project,
+      canvas: args.canvas,
     });
     console.log(line);
   },

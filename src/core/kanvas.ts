@@ -552,6 +552,20 @@ function scopeModel(model: BoardModel, project: string): BoardModel {
   };
 }
 
+/** The canvas equivalent of the four spine checks: parseable, ours, and not empty. */
+export function validateCanvas(raw: string): string | null {
+  if (raw.length === 0) return "renderer returned empty text";
+  let parsed: { nodes?: unknown; janusManaged?: unknown };
+  try {
+    parsed = JSON.parse(raw) as typeof parsed;
+  } catch {
+    return "output is not valid JSON";
+  }
+  if (!Array.isArray(parsed.nodes)) return "output has no nodes array";
+  if (parsed.janusManaged !== true) return "output lost the janusManaged stamp";
+  return null;
+}
+
 function isDegenerate(model: BoardModel): boolean {
   const definite = model.projects.filter((p) => p.outcome !== "unreadable");
   return model.cards.length === 0 || definite.length === 0;
@@ -569,17 +583,27 @@ export async function writeBoard(opts: {
   dryRun?: boolean;
   /** Render only this project, into its own folder, leaving the shared board alone. */
   scope?: { project: string; obsidianPath: string };
+  /** Emit Obsidian's visual board instead of the markdown table. */
+  canvas?: boolean;
 }): Promise<WriteResult> {
-  const path = opts.scope
+  const base_path = opts.scope
     ? projectBoardPath(opts.scope.obsidianPath, opts.scope.project)
     : boardPath(opts.vaultPath);
+  const path = opts.canvas ? canvasPath(base_path) : base_path;
   const model = opts.scope ? scopeModel(opts.model, opts.scope.project) : opts.model;
   const { markdown, rendered, summarized } = renderBoard(model, opts.scope?.project);
+  const output = opts.canvas ? renderCanvas(model, opts.scope?.project) : markdown;
   const base = { path, rendered, summarized, declined: opts.model.declined };
   const file = Bun.file(path);
   const existing = (await file.exists()) ? await file.text() : null;
 
-  if (existing !== null) {
+  if (existing !== null && opts.canvas) {
+    // JSON carries no frontmatter, so ownership is the top-level key the
+    // renderer stamps. Anything else at that path is someone's own canvas.
+    if (!canvasIsOurs(existing)) {
+      return { ...base, outcome: "not-ours", detail: "existing canvas is not managed by Janus — rename or delete it" };
+    }
+  } else if (existing !== null) {
     const freeze = describeFreeze(existing);
     if (freeze) return { ...base, outcome: "frozen", detail: freeze.message };
     const flags = readFreezeFlags(existing);
@@ -595,16 +619,16 @@ export async function writeBoard(opts: {
     return { ...base, outcome: "degenerate", detail: "model is empty — refusing to wipe the board (--allow-empty overrides)" };
   }
 
-  const invalid = validateBoard(markdown);
+  const invalid = opts.canvas ? validateCanvas(output) : validateBoard(output);
   if (invalid) return { ...base, outcome: "invalid", detail: `refusing to write: ${invalid}` };
 
-  if (existing === markdown) return { ...base, outcome: "unchanged", detail: "already up to date" };
+  if (existing === output) return { ...base, outcome: "unchanged", detail: "already up to date" };
 
   if (opts.dryRun) return { ...base, outcome: "written", detail: "dry-run — nothing written" };
 
   await mkdir(dirname(path), { recursive: true });
   const tmp = `${path}${TEMP_SUFFIX}`;
-  await Bun.write(tmp, markdown);
+  await Bun.write(tmp, output);
   await rename(tmp, path);
   return { ...base, outcome: "written", detail: "board written" };
 }
@@ -656,6 +680,8 @@ export async function runKanvas(opts: {
   allowEmpty?: boolean;
   /** Render only this project into its own folder, leaving the shared board alone. */
   project?: string;
+  /** Emit Obsidian's visual board instead of the markdown table. */
+  canvas?: boolean;
 }): Promise<{ result: WriteResult; line: string }> {
   let scope: { project: string; obsidianPath: string } | undefined;
   if (opts.project) {
@@ -670,6 +696,7 @@ export async function runKanvas(opts: {
     allowEmpty: opts.allowEmpty,
     dryRun: opts.dryRun,
     scope,
+    canvas: opts.canvas,
   });
   return {
     result,
@@ -680,4 +707,111 @@ export async function runKanvas(opts: {
       blockedOutcome: model.blockedOutcome,
     }),
   };
+}
+
+// ─── Canvas renderer ────────────────────────────────────────────────────────
+
+/**
+ * The same model as a JSON Canvas 1.0 file — Obsidian's native visual board.
+ *
+ * Markdown cannot lay out columns: a generated table is the closest it gets, and
+ * it reads as a spreadsheet. Canvas is the only format in this vault that draws
+ * a board, which is why the plan recorded it as the thing to revisit the moment
+ * the board was wanted as a spatial artifact rather than a status page.
+ *
+ * Two consequences that come with it, both accepted rather than solved:
+ * canvas content is not reachable from Obsidian's search, and a `.canvas` is
+ * JSON with no frontmatter, so the ownership stamp every other Janus artifact
+ * carries has to live in a top-level key instead. The spec allows extra keys and
+ * Obsidian preserves them, which is what makes that possible.
+ *
+ * The generator owns the layout completely. Group containment in this format is
+ * geometric, not declared, so a card belongs to a column only because its box
+ * sits inside the column's box — moving one without the other silently breaks it.
+ */
+const CANVAS_COL_W = 420;
+const CANVAS_COL_GAP = 40;
+const CANVAS_CARD_H = 110;
+const CANVAS_CARD_GAP = 16;
+const CANVAS_HEADER_H = 60;
+
+/** Preset colours are 1..6 = red, orange, yellow, green, cyan, purple. */
+const CANVAS_COLOR: Record<Column, string> = {
+  now: "4",
+  next: "5",
+  blocked: "1",
+  done: "3",
+};
+
+/** A stable id per card: the canvas is regenerated, so ids must not wander. */
+function canvasId(seed: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return `${h.toString(16).padStart(8, "0")}${seed.length.toString(16).padStart(4, "0")}`;
+}
+
+export function renderCanvas(model: BoardModel, scope?: string): string {
+  const byColumn = new Map<Column, BoardCard[]>();
+  for (const col of COLUMNS) byColumn.set(col, []);
+  for (const card of model.cards) byColumn.get(card.column)!.push(card);
+
+  const nodes: Array<Record<string, unknown>> = [];
+  const tallest = Math.max(1, ...COLUMNS.map((c) => byColumn.get(c)!.length));
+  const groupH = CANVAS_HEADER_H + tallest * (CANVAS_CARD_H + CANVAS_CARD_GAP) + CANVAS_CARD_GAP;
+
+  COLUMNS.forEach((col, i) => {
+    const x = i * (CANVAS_COL_W + CANVAS_COL_GAP);
+    const cards = byColumn.get(col)!;
+    nodes.push({
+      id: canvasId(`group:${col}`),
+      type: "group",
+      label: `${COLUMN_LABEL[col]} (${cards.length})`,
+      x: x - CANVAS_CARD_GAP,
+      y: -CANVAS_HEADER_H,
+      width: CANVAS_COL_W + CANVAS_CARD_GAP * 2,
+      height: groupH,
+    });
+    cards.forEach((card, j) => {
+      const who = scope ? "" : `\n\n— ${card.project}`;
+      const mark = card.provenance === "inferred" ? "\n\n_inferred_" : "";
+      nodes.push({
+        id: canvasId(card.id),
+        type: "text",
+        text: `${card.title}${who}${mark}`,
+        x,
+        y: j * (CANVAS_CARD_H + CANVAS_CARD_GAP),
+        width: CANVAS_COL_W,
+        height: CANVAS_CARD_H,
+        color: CANVAS_COLOR[col],
+      });
+    });
+  });
+
+  // No frontmatter in JSON, so ownership lives here. The spec allows extra
+  // top-level keys and Obsidian preserves them across its own saves.
+  const doc = {
+    nodes,
+    edges: [],
+    janusManaged: true,
+    janusGeneratedAt: model.today,
+    janusScope: scope ?? "all",
+  };
+  return `${JSON.stringify(doc, null, 2)}\n`;
+}
+
+/** Ownership for a canvas: the JSON key that replaces the frontmatter stamp. */
+export function canvasIsOurs(raw: string): boolean {
+  try {
+    const parsed = JSON.parse(raw) as { janusManaged?: unknown };
+    return parsed.janusManaged === true;
+  } catch {
+    return false;
+  }
+}
+
+export function canvasPath(target: string): string {
+  return target.replace(/\.md$/, ".canvas");
 }

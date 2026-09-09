@@ -386,7 +386,9 @@ async function maybeRegenerateRoadmap(project: ProjectConfig, pulses: ParsedPuls
   const objective = draft.objective || "(not extracted from pulses — fill in manually)";
   const milestonesMd = draft.milestones.length > 0
     ? draft.milestones.map((m) => `- [ ] ${m}`).join("\n")
-    : "- [ ] (no milestones inferred — fill in)";
+    // Not a checkbox: the board reads `- [ ]` lines as work items, and a
+    // placeholder rendered as a card would claim work nobody planned.
+    : "- (no milestones inferred — fill in)";
   const backlogMd = draft.backlog.length > 0
     ? draft.backlog.map((b) => `- ${b}`).join("\n")
     : "- (no backlog inferred — fill in)";

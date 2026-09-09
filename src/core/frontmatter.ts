@@ -54,7 +54,12 @@ export function prependFrontmatter(lines: string[], body: string): string {
   return `${OPEN}${lines.join("\n")}\n---\n\n${body}`;
 }
 
-const TAGS_RE = /^tags:\s*\[(.*)\]\s*$/m;
+/** `key: [a, b]` on one line. Shared so the readers and the editor cannot drift. */
+function inlineArrayRe(key: string): RegExp {
+  return new RegExp(`^${key}:\\s*\\[(.*)\\]\\s*$`, "m");
+}
+
+const TAGS_RE = inlineArrayRe("tags");
 
 /**
  * Parse an inline flow array (`key: [a, b]`) from a frontmatter text ([] if
@@ -62,7 +67,7 @@ const TAGS_RE = /^tags:\s*\[(.*)\]\s*$/m;
  * calibrated to — a block-style list is not read.
  */
 export function readInlineArray(frontmatter: string, key: string): string[] {
-  const m = frontmatter.match(new RegExp(`^${key}:\\s*\\[(.*)\\]\\s*$`, "m"));
+  const m = frontmatter.match(inlineArrayRe(key));
   if (!m) return [];
   return m[1]!.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
 }

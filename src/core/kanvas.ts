@@ -12,7 +12,6 @@
  * this module would otherwise have to invent — `needs_review` and `source` say
  * whether a roadmap was reconciled against the repo or inferred from a pulse.
  */
-import { existsSync } from "node:fs";
 import { mkdir, rename } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { JanusConfig } from "../config/types.ts";
@@ -29,7 +28,7 @@ export const COLUMNS: readonly Column[] = ["now", "next", "blocked", "done"];
 
 export type CardProvenance = "reconciled" | "inferred";
 
-export type ProjectOutcome = CardProvenance | "no-source" | "unreadable";
+export type ProjectOutcome = CardProvenance | "no-mirror" | "unparsed" | "unreadable";
 
 export interface BoardCard {
   /** `<project>/<slug>` — project-scoped, since titles collide across projects. */
@@ -63,7 +62,7 @@ export function normalizeColumn(raw: string | undefined): Column {
     .trim();
   if (/^(blocked|blocker|stuck|waiting|bloquead|trabad|esperando)/.test(head)) return "blocked";
   if (/^(shipped|done|complet|released|closed|cerrad|entregad|termin|hecho)/.test(head)) return "done";
-  if (/^(active|in progress|doing|current|wip|en curso|en progreso|activo|haciendo)/.test(head)) return "now";
+  if (/^(active|in progress|doing|current|wip|en curso|en progreso|activo|haciendo|hitos activos)/.test(head)) return "now";
   if (/^(next|near backlog|backlog|upcoming|planned|later|pr[oó]xim|siguiente|pendiente)/.test(head)) return "next";
   return DEFAULT_COLUMN;
 }
@@ -82,7 +81,13 @@ function slug(title: string): string {
 function parseCards(body: string, project: string, provenance: CardProvenance): BoardCard[] {
   const cards: BoardCard[] = [];
   let heading = "";
+  let inFence = false;
   for (const line of body.split("\n")) {
+    if (/^\s*(```|~~~)/.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
     const h = line.match(HEADING);
     if (h) {
       heading = h[1]!;
@@ -137,13 +142,13 @@ export async function collectProjectCards(opts: { config: JanusConfig }): Promis
     try {
       const content = await readIfExists(roadmapPath(project.obsidianPath));
       if (content === null) {
-        projects.push({ project: name, outcome: "no-source" });
+        projects.push({ project: name, outcome: "no-mirror" });
         continue;
       }
       const { frontmatter, body } = splitFrontmatter(content);
       const source = readScalar(frontmatter, "source");
       if (source !== null && /^pending/.test(source)) {
-        projects.push({ project: name, outcome: "no-source" });
+        projects.push({ project: name, outcome: "no-mirror" });
         continue;
       }
       // Provenance follows `needs_review` alone: a mirror Janus inferred and the
@@ -155,7 +160,7 @@ export async function collectProjectCards(opts: { config: JanusConfig }): Promis
       const provenance: CardProvenance = needsReview === false ? "reconciled" : "inferred";
       const parsed = parseCards(body, name, provenance);
       if (parsed.length === 0) {
-        projects.push({ project: name, outcome: "no-source" });
+        projects.push({ project: name, outcome: "unparsed" });
         continue;
       }
       cards.push(...parsed);
@@ -184,7 +189,7 @@ export function boardPath(vaultPath: string): string {
  * by project would therefore discard every existing row; labelling the lane for
  * what the data actually is costs nothing and claims nothing false.
  */
-export type BlockerSourceOutcome = "ok" | "no-weekly-in-window" | "unreachable";
+export type BlockerSourceOutcome = "ok" | "no-rows-in-window" | "unreachable";
 
 export interface BlockedEntry {
   /** The blocker hash. Project-free, because the rows are. */
@@ -246,7 +251,7 @@ function readBlocked(
     }));
     return {
       entries,
-      outcome: entries.length === 0 ? "no-weekly-in-window" : "ok",
+      outcome: entries.length === 0 ? "no-rows-in-window" : "ok",
       declined: rows.length - inWindow.length,
     };
   } finally {
@@ -281,7 +286,7 @@ const COLUMN_CAP = 12;
 /** Suffix, not a dot prefix: a crash leftover stays visible to the user in
  *  Obsidian instead of hidden, and it matches neither `Dashboards/ **\/*.md`
  *  nor any `.md` filter. Matches the only temp-then-rename precedent in the repo. */
-const TEMP_SUFFIX = ".janus.tmp";
+export const TEMP_SUFFIX = ".janus.tmp";
 
 const COLUMN_LABEL: Record<Column, string> = {
   now: "Now",
@@ -323,7 +328,8 @@ export function renderBoard(model: BoardModel): RenderResult {
   }
 
   const failed = model.projects.filter((p) => p.outcome === "unreadable").map((p) => p.project);
-  const noSource = model.projects.filter((p) => p.outcome === "no-source").map((p) => p.project);
+  const noMirror = model.projects.filter((p) => p.outcome === "no-mirror").map((p) => p.project);
+  const unparsed = model.projects.filter((p) => p.outcome === "unparsed").map((p) => p.project);
 
   const fm = [
     "---",
@@ -370,9 +376,9 @@ export function renderBoard(model: BoardModel): RenderResult {
   out.push("## Blocked — cross-project", "");
   if (model.blockedOutcome === "unreachable") {
     out.push("State database unreachable, so this lane is **unknown**, not empty.", "");
-  } else if (model.blockedOutcome === "no-weekly-in-window") {
+  } else if (model.blockedOutcome === "no-rows-in-window") {
     out.push(
-      "No weekly rollup recorded inside the window, so this lane is **unknown**, not empty.",
+      "No blocker was recorded inside the window, so this lane is **unknown**, not empty. Either nothing was reported as blocking, or no weekly ran — the lane cannot tell those apart.",
       "",
     );
   } else {
@@ -386,11 +392,19 @@ export function renderBoard(model: BoardModel): RenderResult {
     out.push("");
   }
 
-  if (noSource.length > 0) {
-    out.push("## No card source", "");
-    for (const p of noSource) {
-      out.push(`- ${p} — no roadmap mirror with work items yet.`);
-    }
+  if (noMirror.length > 0) {
+    out.push("## No roadmap mirror yet", "");
+    for (const p of noMirror) out.push(`- ${p}`);
+    out.push("");
+  }
+
+  if (unparsed.length > 0) {
+    out.push("## Roadmap present, no checkbox work items", "");
+    out.push(
+      "The board reads `- [ ]` lines. These projects have a roadmap, but it carries prose or tables instead — nothing was dropped, there was nothing in that shape to read.",
+      "",
+    );
+    for (const p of unparsed) out.push(`- ${p}`);
     out.push("");
   }
 
@@ -427,6 +441,8 @@ export function validateBoard(md: string): string | null {
   const fm = md.match(/^---\n[\s\S]*?\n---\n/);
   if (!fm) return "frontmatter does not close";
   if (md.slice(fm[0].length).trim().length < 100) return "body is too short to be a board";
+  if (!/^managed_by_janus:\s*true\s*$/m.test(fm[0])) return "output lost the managed_by_janus stamp";
+  if (!md.includes("# Kanvas")) return "output lost its board heading";
   return null;
 }
 
@@ -449,7 +465,8 @@ export async function writeBoard(opts: {
   const path = boardPath(opts.vaultPath);
   const { markdown, rendered, summarized } = renderBoard(opts.model);
   const base = { path, rendered, summarized, declined: opts.model.declined };
-  const existing = existsSync(path) ? await Bun.file(path).text() : null;
+  const file = Bun.file(path);
+  const existing = (await file.exists()) ? await file.text() : null;
 
   if (existing !== null) {
     const freeze = describeFreeze(existing);
@@ -511,7 +528,11 @@ export function formatKanvasResult(opts: {
   const stateNote = opts.blockedOutcome === "unreachable" ? " (no state.db — blocked lane unknown)" : "";
   return (
     `[kanvas] ${prefix}${verdict(result, opts.dryRun)}` +
-    ` · rendered ${result.rendered} · summarized ${result.summarized} · declined ${result.declined}` +
+    ` · rendered ${result.rendered} · summarized ${result.summarized}` +
+    // Named as "older" rather than "declined": the count is every blocker row
+    // outside the window, so it grows for the life of the database and would
+    // otherwise read as an error total.
+    ` · ${result.declined} blocker rows older than the window` +
     ` · state ${state}${stateNote} · board ${result.path}`
   );
 }

@@ -153,7 +153,7 @@ describe("runKanvas — result line", () => {
     expect(line).toContain("written");
     expect(line).toContain("rendered 2");
     expect(line).toContain("summarized 0");
-    expect(line).toContain("declined 0");
+    expect(line).toContain("0 blocker rows older than the window");
     expect(line).toContain(boardPath(vault));
   });
 

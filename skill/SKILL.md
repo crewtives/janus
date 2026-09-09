@@ -72,7 +72,7 @@ Mapeo entre intención del usuario y comando concreto:
 | "Arrancar MCP server" / "exponer Janus a otra sesión" | `janus mcp` |
 | "Draft de Note para el portfolio" / "armame una nota sobre X" | `janus note "<topic>" [--title "..."] [--project <name>]` |
 | "Enriquecer vault + scaffold (idx/roadmap/strategy/hubs/MOCs)" | `janus enrich [--project <name>] [--sync-roadmaps]` |
-| "Tablero cross-proyecto" / "qué tengo abierto en todos lados" | `janus kanvas [--dry-run]` |
+| "Tablero cross-proyecto" / "qué tengo abierto en todos lados" | `janus kanvas [--dry-run]`, después **leer** `Dashboards/Kanvas.md` |
 | "Scaffold completo del vault" (hubs + MOCs + dashboards + fix wiki-links) | `cd <repo-de-janus> && bun run scripts/scaffold-vault.ts` |
 | "Eval del voice overhaul side-by-side" | `cd <repo-de-janus> && bun run scripts/eval-prompt-voice.ts --last 3` |
 | "Smoke validation de Phase 1" | `cd <repo-de-janus> && bun run scripts/smoke-validate-phase1.ts` |
@@ -115,3 +115,10 @@ Después de correr, mostrar al usuario:
 - Paths donde quedaron los archivos (Obsidian + repo).
 - Si hubo fallos, qué proyectos/fechas y el error.
 - Si se mandó a Discord, confirmar el envío.
+
+## Kanvas: el comando refresca, no responde
+
+`janus kanvas` imprime una línea de estadísticas (`rendered N · summarized N · declined N`)
+y nada más — nunca el contenido del tablero. Para contestar "qué tengo abierto en todos
+lados" hay que **leer `Dashboards/Kanvas.md`** después de correrlo y relatar eso. Reportar
+sólo la línea de escritura no responde la pregunta que activó la ruta.

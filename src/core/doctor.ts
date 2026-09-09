@@ -1,9 +1,9 @@
 import { existsSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { Checkpoint, hasStateDb } from "./checkpoint.ts";
-import { describeFreeze, readInlineArray, splitFrontmatter } from "./frontmatter.ts";
+import { describeFreeze, readFreezeFlags, readInlineArray, readScalar, splitFrontmatter } from "./frontmatter.ts";
 import { isRepo } from "./git.ts";
-import { activeBoardProjects, boardPath, buildBoardModel } from "./kanvas.ts";
+import { activeBoardProjects, boardPath, buildBoardModel, TEMP_SUFFIX } from "./kanvas.ts";
 import { DEFAULT_LABEL } from "./init/launchd.ts";
 import { loadConfig } from "../config/loader.ts";
 import type { JanusConfig, ProjectConfig } from "../config/types.ts";
@@ -369,9 +369,11 @@ export async function pulseDatesOnDisk(obsidianPath: string): Promise<Set<string
 export async function checkKanvasBoard(config: JanusConfig, today: string): Promise<CheckResult> {
   const name = "kanvas board";
   const path = boardPath(config.obsidianVault);
-  // Mirrors the private TEMP_SUFFIX of src/core/kanvas.ts. The writer renames
-  // into place, so a leftover means a write was killed mid-flight.
-  const tmp = `${path}.janus.tmp`;
+  // The writer renames into place, so a leftover means a write was killed
+  // mid-flight. The suffix is imported, not copied: a hand-mirrored constant
+  // stops matching the moment the writer changes it, and the check goes quietly
+  // green while the leftover sits there.
+  const tmp = `${path}${TEMP_SUFFIX}`;
   const siblings = await boardSiblings(path);
   const note = siblings.length > 0 ? ` · also in Dashboards/: ${siblings.join(", ")}` : "";
 
@@ -383,18 +385,37 @@ export async function checkKanvasBoard(config: JanusConfig, today: string): Prom
   if (existing !== null) {
     const freeze = describeFreeze(existing);
     if (freeze) return { name, ok: true, detail: `${freeze.message}${note}` };
+    // A file Janus does not own is a stuck state it will never resolve on its
+    // own: every future run refuses, and without this the check would report
+    // "present" forever while the board silently stopped updating.
+    if (readFreezeFlags(existing).managed !== true) {
+      return {
+        name,
+        ok: false,
+        detail: `a file Janus does not own sits at ${basename(path)}${note} — rename or delete it, then run \`janus kanvas\``,
+      };
+    }
     // Partial is a normal state, not a failure: one unreadable mirror costs that
     // project's cards and the board says so in its own banner.
     const failed = readFailedProjects(existing);
     const partial = failed.length > 0 ? ` · last run was partial, could not read: ${failed.join(", ")}` : "";
-    return { name, ok: true, detail: `present${partial}${note}` };
+    const written = readScalar(splitFrontmatter(existing).frontmatter, "generated_at");
+    const when = written !== null ? ` · last written ${written}` : "";
+    return { name, ok: true, detail: `present${when}${partial}${note}` };
   }
 
   if (!anyPulseRecorded(config)) {
     return { name, ok: true, detail: `no pulse recorded yet — the board block has not run${note}` };
   }
 
-  const model = await buildBoardModel({ config, today });
+  let model: Awaited<ReturnType<typeof buildBoardModel>>;
+  try {
+    model = await buildBoardModel({ config, today });
+  } catch (err) {
+    // runDoctor returns checks.every(ok) and the command exits on it, so an
+    // unguarded throw here would take every other check's output down with it.
+    return { name, ok: false, detail: `could not build the board: ${err instanceof Error ? err.message : String(err)}` };
+  }
   if (model.cards.length === 0 && model.blocked.length === 0) {
     return { name, ok: true, detail: `nothing to render — no card source and no blocker in window${note}` };
   }
@@ -443,7 +464,7 @@ async function boardSiblings(path: string): Promise<string[]> {
   const glob = new Bun.Glob(`${basename(path, ".md")}*`);
   for await (const file of glob.scan({ cwd: dir, onlyFiles: true })) {
     // The temp file has its own check, with its own remediation.
-    if (file === self || file === `${self}.janus.tmp`) continue;
+    if (file === self || file === `${self}${TEMP_SUFFIX}`) continue;
     out.push(file);
   }
   return out.sort();

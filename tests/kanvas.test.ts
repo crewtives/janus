@@ -167,7 +167,7 @@ describe("collectProjectCards", () => {
     await cleanup();
   });
 
-  test("a pending placeholder mirror is no-source, not a source with zero cards", async () => {
+  test("a pending placeholder mirror is no-mirror, not a source with zero cards", async () => {
     const pending = mirror({
       needsReview: true,
       source: "pending",
@@ -175,12 +175,12 @@ describe("collectProjectCards", () => {
     });
     const { config, cleanup } = await setup([{ name: "alpha", roadmap: pending }]);
     const result = await collectProjectCards({ config });
-    expect(result.projects[0]?.outcome).toBe("no-source");
+    expect(result.projects[0]?.outcome).toBe("no-mirror");
     expect(result.cards).toHaveLength(0);
     await cleanup();
   });
 
-  test("a mirror with no checkbox lines is no-source", async () => {
+  test("a prose mirror is unparsed, which is not the same as having no mirror", async () => {
     const prose = mirror({
       needsReview: false,
       source: "reconciled-vs-repo",
@@ -188,14 +188,14 @@ describe("collectProjectCards", () => {
     });
     const { config, cleanup } = await setup([{ name: "alpha", roadmap: prose }]);
     const result = await collectProjectCards({ config });
-    expect(result.projects[0]?.outcome).toBe("no-source");
+    expect(result.projects[0]?.outcome).toBe("unparsed");
     await cleanup();
   });
 
-  test("a missing mirror is no-source and does not throw", async () => {
+  test("a missing mirror is no-mirror and does not throw", async () => {
     const { config, cleanup } = await setup([{ name: "alpha", roadmap: null }]);
     const result = await collectProjectCards({ config });
-    expect(result.projects[0]?.outcome).toBe("no-source");
+    expect(result.projects[0]?.outcome).toBe("no-mirror");
     await cleanup();
   });
 
@@ -324,7 +324,7 @@ describe("buildBoardModel — blocked lane", () => {
       config: { ...config, stateDir: state.stateDir },
       today: "2026-09-09",
     });
-    expect(model.blockedOutcome).toBe("no-weekly-in-window");
+    expect(model.blockedOutcome).toBe("no-rows-in-window");
     expect(model.blocked).toHaveLength(0);
     await state.cleanup();
     await cleanup();
@@ -337,7 +337,7 @@ describe("buildBoardModel — blocked lane", () => {
       config: { ...config, stateDir: state.stateDir },
       today: "2026-09-09",
     });
-    expect(model.blockedOutcome).toBe("no-weekly-in-window");
+    expect(model.blockedOutcome).toBe("no-rows-in-window");
     await state.cleanup();
     await cleanup();
   });
@@ -438,7 +438,7 @@ function emptyModel(today = "2026-09-09"): BoardModel {
     cards: [],
     projects: [],
     blocked: [],
-    blockedOutcome: "no-weekly-in-window",
+    blockedOutcome: "no-rows-in-window",
     partial: false,
     declined: 0,
   };
@@ -748,6 +748,69 @@ describe("writeBoard — remaining guards and convergence", () => {
     const result = await defuseVault({ vaultPath: vault, config });
     expect(result.scanned).toBe(0);
     await writeBoard({ model, vaultPath: vault });
+    await cleanup();
+  });
+});
+
+describe("findings from review", () => {
+  test("the heading Janus itself writes for active milestones lands in Now", () => {
+    // `sync-roadmaps.ts` emits `## Hitos activos esta semana`. Testing invented
+    // Spanish headings instead of the literal strings Janus writes is how this
+    // was missed the first time.
+    expect(normalizeColumn("Hitos activos esta semana")).toBe("now");
+  });
+
+  test("a fenced code block does not mint phantom cards", async () => {
+    const fenced = mirror({
+      needsReview: false,
+      source: "reconciled-vs-repo",
+      body: [
+        "## In progress",
+        "",
+        "- [ ] Real card",
+        "",
+        "```markdown",
+        "## Shipped",
+        "- [x] Example from a README, not a card",
+        "```",
+        "",
+      ].join("\n"),
+    });
+    const { config, cleanup } = await setup([{ name: "alpha", roadmap: fenced }]);
+    const result = await collectProjectCards({ config });
+    expect(result.cards.map((c) => c.title)).toEqual(["Real card"]);
+    await cleanup();
+  });
+
+  test("a prose mirror renders as roadmap-present, not as no mirror", async () => {
+    const prose = mirror({
+      needsReview: false,
+      source: "reconciled-vs-repo",
+      body: "## Objective\n\nProse and tables, no checkboxes.\n",
+    });
+    const { config, cleanup } = await setup([{ name: "alpha", roadmap: prose }]);
+    const model = await buildBoardModel({ config, today: "2026-09-09" });
+    const md = renderBoard(model).markdown;
+    expect(md).toContain("Roadmap present, no checkbox work items");
+    expect(md).not.toContain("No roadmap mirror yet");
+    await cleanup();
+  });
+
+  test("validation rejects output that lost its ownership stamp", () => {
+    const good = renderBoard(emptyModel()).markdown;
+    expect(validateBoard(good)).toBeNull();
+    expect(validateBoard(good.replace("managed_by_janus: true", "managed_by_janus: false"))).toContain(
+      "managed_by_janus",
+    );
+    expect(validateBoard(good.replace("# Kanvas", "# Something else"))).toContain("heading");
+  });
+
+  test("the not-ours guard fires before the degenerate guard", async () => {
+    const mine = "---\ntitle: my own board\n---\n\nhand written, no ownership key\n";
+    const { vault, cleanup } = await vaultWith(mine);
+    const result = await writeBoard({ model: emptyModel(), vaultPath: vault });
+    expect(result.outcome).toBe("not-ours");
+    expect(await Bun.file(boardPath(vault)).text()).toBe(mine);
     await cleanup();
   });
 });

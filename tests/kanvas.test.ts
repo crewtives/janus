@@ -1,10 +1,21 @@
 import { describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { JanusConfig, ProjectConfig } from "../src/config/types.ts";
 import { Checkpoint } from "../src/core/checkpoint.ts";
-import { buildBoardModel, collectProjectCards, normalizeColumn } from "../src/core/kanvas.ts";
+import { defuseVault } from "../src/core/defuse.ts";
+import type { BoardModel } from "../src/core/kanvas.ts";
+import {
+  boardPath,
+  buildBoardModel,
+  collectProjectCards,
+  normalizeColumn,
+  renderBoard,
+  validateBoard,
+  writeBoard,
+} from "../src/core/kanvas.ts";
 
 interface FixtureProject {
   name: string;
@@ -383,6 +394,343 @@ describe("buildBoardModel — blocked lane", () => {
     });
     expect(model.partial).toBe(false);
     await state.cleanup();
+    await cleanup();
+  });
+});
+
+// ─── U2: renderer and guarded write ─────────────────────────────────────────
+
+async function vaultWith(board: string | null): Promise<{ vault: string; cleanup: () => Promise<void> }> {
+  const dir = await mkdtemp(join(tmpdir(), "janus-kanvas-vault-"));
+  const vault = join(dir, "vault");
+  await mkdir(join(vault, "Dashboards"), { recursive: true });
+  if (board !== null) await writeFile(join(vault, "Dashboards", "Kanvas.md"), board);
+  return { vault, cleanup: () => rm(dir, { recursive: true, force: true }) };
+}
+
+async function modelWithCards(): Promise<BoardModel> {
+  const { config, cleanup } = await setup([{ name: "alpha", roadmap: RECONCILED }]);
+  const m = await buildBoardModel({ config, today: "2026-09-09" });
+  await cleanup();
+  return m;
+}
+
+function emptyModel(today = "2026-09-09"): BoardModel {
+  return {
+    today,
+    cards: [],
+    projects: [],
+    blocked: [],
+    blockedOutcome: "no-weekly-in-window",
+    partial: false,
+    declined: 0,
+  };
+}
+
+describe("renderBoard", () => {
+  test("rendering twice from an identical model produces identical bytes", async () => {
+    const model = await modelWithCards();
+    expect(renderBoard(model).markdown).toBe(renderBoard(model).markdown);
+  });
+
+  test("emits the canonical dashboard tag as an inline flow array", async () => {
+    const model = await modelWithCards();
+    expect(renderBoard(model).markdown).toContain("tags: [type/dashboard]");
+  });
+
+  test("stamps positive ownership and never emits the review key", async () => {
+    const model = await modelWithCards();
+    const md = renderBoard(model).markdown;
+    expect(md).toContain("managed_by_janus: true");
+    expect(md).not.toMatch(/^needs_review:/m);
+  });
+
+  test("carries no wiki-links", async () => {
+    const model = await modelWithCards();
+    expect(renderBoard(model).markdown).not.toContain("[[");
+  });
+
+  test("a partial model renders totals as unknown and names the failed input", async () => {
+    const model = await modelWithCards();
+    model.partial = true;
+    model.projects.push({ project: "beta", outcome: "unreadable" });
+    const md = renderBoard(model).markdown;
+    expect(md.toLowerCase()).toContain("unknown");
+    expect(md).toContain("beta");
+  });
+
+  test("caps a column and summarizes the remainder instead of dropping it", () => {
+    const model = emptyModel();
+    for (let i = 0; i < 15; i++) {
+      model.cards.push({
+        id: `alpha/card-${i}`,
+        project: "alpha",
+        title: `Card ${i}`,
+        column: "now",
+        provenance: "reconciled",
+      });
+    }
+    const r = renderBoard(model);
+    expect(r.rendered).toBe(12);
+    expect(r.summarized).toBe(3);
+    expect(r.rendered + r.summarized).toBe(model.cards.length);
+    expect(r.markdown).toContain("3 more");
+  });
+
+  test("escapes a pipe in a card title so the table survives", () => {
+    const model = emptyModel();
+    model.cards.push({
+      id: "alpha/a-b",
+      project: "alpha",
+      title: "a | b",
+      column: "now",
+      provenance: "reconciled",
+    });
+    expect(renderBoard(model).markdown).toContain("a \\| b");
+  });
+
+  test("an unknown blocked lane says so instead of rendering empty", () => {
+    const md = renderBoard(emptyModel()).markdown;
+    expect(md.toLowerCase()).toContain("unknown");
+  });
+
+  test("the freeze hint never appears as a bare frontmatter-shaped line in the body", async () => {
+    const model = await modelWithCards();
+    const md = renderBoard(model).markdown;
+    const body = md.split("\n---\n").slice(1).join("\n---\n");
+    expect(body).not.toMatch(/^managed_by_janus:\s*false\s*$/m);
+  });
+});
+
+describe("writeBoard", () => {
+  test("writes the board when none exists, then reports unchanged on a rerun", async () => {
+    const model = await modelWithCards();
+    const { vault, cleanup } = await vaultWith(null);
+    const first = await writeBoard({ model, vaultPath: vault });
+    expect(first.outcome).toBe("written");
+    const onDisk = await Bun.file(boardPath(vault)).text();
+    const second = await writeBoard({ model, vaultPath: vault });
+    expect(second.outcome).toBe("unchanged");
+    expect(await Bun.file(boardPath(vault)).text()).toBe(onDisk);
+    await cleanup();
+  });
+
+  test("a degenerate model does not overwrite an existing board", async () => {
+    const model = await modelWithCards();
+    const { vault, cleanup } = await vaultWith(null);
+    await writeBoard({ model, vaultPath: vault });
+    const before = await Bun.file(boardPath(vault)).text();
+    const result = await writeBoard({ model: emptyModel(), vaultPath: vault });
+    expect(result.outcome).toBe("degenerate");
+    expect(await Bun.file(boardPath(vault)).text()).toBe(before);
+    await cleanup();
+  });
+
+  test("allowEmpty lets a degenerate model through", async () => {
+    const model = await modelWithCards();
+    const { vault, cleanup } = await vaultWith(null);
+    await writeBoard({ model, vaultPath: vault });
+    const result = await writeBoard({ model: emptyModel(), vaultPath: vault, allowEmpty: true });
+    expect(result.outcome).toBe("written");
+    await cleanup();
+  });
+
+  test("a degenerate model still creates the first board when none exists", async () => {
+    const { vault, cleanup } = await vaultWith(null);
+    const result = await writeBoard({ model: emptyModel(), vaultPath: vault });
+    expect(result.outcome).toBe("written");
+    await cleanup();
+  });
+
+  test("a file without the ownership key is refused, and allowEmpty does not override it", async () => {
+    const mine = "---\ntitle: my own board\n---\n\nhand written\n";
+    const { vault, cleanup } = await vaultWith(mine);
+    const model = await modelWithCards();
+    const result = await writeBoard({ model, vaultPath: vault, allowEmpty: true });
+    expect(result.outcome).toBe("not-ours");
+    expect(await Bun.file(boardPath(vault)).text()).toBe(mine);
+    await cleanup();
+  });
+
+  test("a file with no frontmatter at all is refused", async () => {
+    const plain = "# my board\n\njust markdown\n";
+    const { vault, cleanup } = await vaultWith(plain);
+    const model = await modelWithCards();
+    const result = await writeBoard({ model, vaultPath: vault });
+    expect(result.outcome).toBe("not-ours");
+    expect(await Bun.file(boardPath(vault)).text()).toBe(plain);
+    await cleanup();
+  });
+
+  test("a file whose frontmatter fence never closes is refused", async () => {
+    const broken = "---\ntitle: unterminated\n\nbody\n";
+    const { vault, cleanup } = await vaultWith(broken);
+    const model = await modelWithCards();
+    const result = await writeBoard({ model, vaultPath: vault });
+    expect(result.outcome).toBe("not-ours");
+    expect(await Bun.file(boardPath(vault)).text()).toBe(broken);
+    await cleanup();
+  });
+
+  test("a frozen board is untouched and the result names the key", async () => {
+    const model = await modelWithCards();
+    const { vault, cleanup } = await vaultWith(null);
+    await writeBoard({ model, vaultPath: vault });
+    const written = await Bun.file(boardPath(vault)).text();
+    const frozen = written.replace("managed_by_janus: true", "managed_by_janus: false");
+    await writeFile(boardPath(vault), frozen);
+    const result = await writeBoard({ model, vaultPath: vault });
+    expect(result.outcome).toBe("frozen");
+    expect(result.detail).toContain("managed_by_janus");
+    expect(await Bun.file(boardPath(vault)).text()).toBe(frozen);
+    await cleanup();
+  });
+
+  test("needs_review false also freezes, and the result names that key instead", async () => {
+    const model = await modelWithCards();
+    const { vault, cleanup } = await vaultWith(null);
+    await writeBoard({ model, vaultPath: vault });
+    const written = await Bun.file(boardPath(vault)).text();
+    const frozen = written.replace("managed_by_janus: true", "managed_by_janus: true\nneeds_review: false");
+    await writeFile(boardPath(vault), frozen);
+    const result = await writeBoard({ model, vaultPath: vault });
+    expect(result.outcome).toBe("frozen");
+    expect(result.detail).toContain("needs_review");
+    await cleanup();
+  });
+
+  test("a freeze key in body prose does not freeze the board", async () => {
+    const model = await modelWithCards();
+    const { vault, cleanup } = await vaultWith(null);
+    await writeBoard({ model, vaultPath: vault });
+    const written = await Bun.file(boardPath(vault)).text();
+    await writeFile(boardPath(vault), `${written}\nneeds_review: false\n`);
+    const result = await writeBoard({ model, vaultPath: vault });
+    expect(result.outcome).toBe("written");
+    await cleanup();
+  });
+
+  test("the freeze guard fires before the degenerate guard", async () => {
+    const model = await modelWithCards();
+    const { vault, cleanup } = await vaultWith(null);
+    await writeBoard({ model, vaultPath: vault });
+    const written = await Bun.file(boardPath(vault)).text();
+    await writeFile(boardPath(vault), written.replace("managed_by_janus: true", "managed_by_janus: false"));
+    const result = await writeBoard({ model: emptyModel(), vaultPath: vault });
+    expect(result.outcome).toBe("frozen");
+    await cleanup();
+  });
+
+  test("dry-run writes nothing and does not create the directory", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "janus-kanvas-dry-"));
+    const vault = join(dir, "vault");
+    const model = await modelWithCards();
+    const result = await writeBoard({ model, vaultPath: vault, dryRun: true });
+    expect(result.outcome).toBe("written");
+    expect(existsSync(join(vault, "Dashboards"))).toBe(false);
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("no temp file survives a successful write", async () => {
+    const model = await modelWithCards();
+    const { vault, cleanup } = await vaultWith(null);
+    await writeBoard({ model, vaultPath: vault });
+    const entries = await readdir(join(vault, "Dashboards"));
+    expect(entries).toEqual(["Kanvas.md"]);
+    await cleanup();
+  });
+
+  test("a stale temp file neither breaks the write nor survives it", async () => {
+    const model = await modelWithCards();
+    const { vault, cleanup } = await vaultWith(null);
+    await writeFile(join(vault, "Dashboards", "Kanvas.md.janus.tmp"), "leftover from a crash");
+    const result = await writeBoard({ model, vaultPath: vault });
+    expect(result.outcome).toBe("written");
+    const entries = await readdir(join(vault, "Dashboards"));
+    expect(entries).toEqual(["Kanvas.md"]);
+    await cleanup();
+  });
+
+  test("the temp name matches no markdown glob", () => {
+    expect("Kanvas.md.janus.tmp".endsWith(".md")).toBe(false);
+  });
+});
+
+describe("writeBoard — remaining guards and convergence", () => {
+  test("a model where every project is unreachable is refused over an existing board", async () => {
+    const model = await modelWithCards();
+    const { vault, cleanup } = await vaultWith(null);
+    await writeBoard({ model, vaultPath: vault });
+    const before = await Bun.file(boardPath(vault)).text();
+    const allBroken: BoardModel = {
+      ...emptyModel(),
+      projects: [
+        { project: "alpha", outcome: "unreadable" },
+        { project: "beta", outcome: "unreadable" },
+      ],
+      partial: true,
+      blocked: [{ id: "x", text: "still a lane entry", lastSeen: "2026-09-06", weeklyCount: 1 }],
+      blockedOutcome: "ok",
+    };
+    const result = await writeBoard({ model: allBroken, vaultPath: vault });
+    expect(result.outcome).toBe("degenerate");
+    expect(await Bun.file(boardPath(vault)).text()).toBe(before);
+    await cleanup();
+  });
+
+  test("most projects unreadable but one contributing still writes, marked partial", async () => {
+    const { config, cleanup } = await setup([
+      { name: "alpha", roadmap: RECONCILED },
+      { name: "beta", roadmap: null, roadmapIsDir: true },
+      { name: "gamma", roadmap: null, roadmapIsDir: true },
+    ]);
+    const model = await buildBoardModel({ config, today: "2026-09-09" });
+    const v = await vaultWith(null);
+    const result = await writeBoard({ model, vaultPath: v.vault });
+    expect(result.outcome).toBe("written");
+    const md = await Bun.file(boardPath(v.vault)).text();
+    expect(md).toContain("beta");
+    expect(md).toContain("gamma");
+    expect(md.toLowerCase()).toContain("unknown");
+    await v.cleanup();
+    await cleanup();
+  });
+
+  test("validation refuses output that is not a well-formed board", () => {
+    expect(validateBoard("")).toContain("empty");
+    expect(validateBoard("# no frontmatter\n")).toContain("frontmatter");
+    expect(validateBoard("---\ntype: dashboard\n\nunterminated\n")).toContain("close");
+    expect(validateBoard("---\ntype: dashboard\n---\n\ntiny\n")).toContain("too short");
+    expect(validateBoard(renderBoard(emptyModel()).markdown)).toBeNull();
+  });
+
+  test("the de-fuse pass finds nothing to change, in either order", async () => {
+    const model = await modelWithCards();
+    const { vault, cleanup } = await vaultWith(null);
+    await writeBoard({ model, vaultPath: vault });
+    const afterWrite = await Bun.file(boardPath(vault)).text();
+
+    const config: JanusConfig = { obsidianVault: vault, projects: [] };
+    const first = await defuseVault({ vaultPath: vault, config });
+    // Non-vacuous: the pass must actually have looked at the board.
+    expect(first.scanned).toBeGreaterThan(0);
+    expect(first.perType.dashboard?.scanned).toBe(1);
+    expect(first.changed).toBe(0);
+    expect(await Bun.file(boardPath(vault)).text()).toBe(afterWrite);
+
+    const rerun = await writeBoard({ model, vaultPath: vault });
+    expect(rerun.outcome).toBe("unchanged");
+    await cleanup();
+  });
+
+  test("neither de-fuse nor a markdown scan sees the temp file", async () => {
+    const model = await modelWithCards();
+    const { vault, cleanup } = await vaultWith(null);
+    await writeFile(join(vault, "Dashboards", "Kanvas.md.janus.tmp"), "---\ntype: dashboard\n---\n\nleftover\n");
+    const config: JanusConfig = { obsidianVault: vault, projects: [] };
+    const result = await defuseVault({ vaultPath: vault, config });
+    expect(result.scanned).toBe(0);
+    await writeBoard({ model, vaultPath: vault });
     await cleanup();
   });
 });

@@ -17,6 +17,7 @@ import { dirname, join } from "node:path";
 import type { JanusConfig } from "../config/types.ts";
 import { Checkpoint, hasStateDb } from "./checkpoint.ts";
 import { readIfExists, roadmapPath } from "./obsidian.ts";
+import { relativeVaultPath } from "./vault-path.ts";
 import { describeFreeze, readFreezeFlags, readScalar, splitFrontmatter } from "./frontmatter.ts";
 
 export type Column = "now" | "next" | "blocked" | "done";
@@ -37,6 +38,13 @@ export interface BoardCard {
   title: string;
   column: Column;
   provenance: CardProvenance;
+  /**
+   * Where the card's own section lives, when it has one. A card written as a
+   * `###` heading under its column carries its rationale in the body, so the
+   * canvas can point at it instead of restating a fragment: the ticket is the
+   * section, not a copy of it.
+   */
+  source?: { path: string; anchor: string };
 }
 
 export interface ProjectState {
@@ -78,7 +86,25 @@ function slug(title: string): string {
     .slice(0, 60);
 }
 
-function parseCards(body: string, project: string, provenance: CardProvenance): BoardCard[] {
+const COLUMN_HEADING = /^##\s+(.+?)\s*$/;
+const CARD_HEADING = /^###\s+(.+?)\s*$/;
+
+/**
+ * Two shapes are cards, and both were needed rather than one replacing the other.
+ *
+ * A `- [ ]` line under a column heading is the plain shape every project can
+ * emit. A `### title` under that same column heading is the enriched shape: it
+ * owns a heading, so it can be linked to, and everything under it is the
+ * reasoning that made it a card. Without the second, a board cell is a label
+ * that leads nowhere and the decision behind the work stays in a file nobody
+ * opens from here.
+ */
+function parseCards(
+  body: string,
+  project: string,
+  provenance: CardProvenance,
+  sourcePath: string,
+): BoardCard[] {
   const cards: BoardCard[] = [];
   let heading = "";
   let inFence = false;
@@ -88,6 +114,25 @@ function parseCards(body: string, project: string, provenance: CardProvenance): 
       continue;
     }
     if (inFence) continue;
+
+    const card = line.match(CARD_HEADING);
+    if (card) {
+      const title = card[1]!;
+      cards.push({
+        id: `${project}/${slug(title)}`,
+        project,
+        title,
+        column: normalizeColumn(heading),
+        provenance,
+        source: { path: sourcePath, anchor: title },
+      });
+      continue;
+    }
+    const col = line.match(COLUMN_HEADING);
+    if (col) {
+      heading = col[1]!;
+      continue;
+    }
     const h = line.match(HEADING);
     if (h) {
       heading = h[1]!;
@@ -162,7 +207,7 @@ export async function collectProjectCards(opts: { config: JanusConfig }): Promis
       const { needsReview } = readFreezeFlags(content);
       const guessed = source !== null && /^pulse-/.test(source);
       const provenance: CardProvenance = guessed && needsReview !== false ? "inferred" : "reconciled";
-      const parsed = parseCards(body, name, provenance);
+      const parsed = parseCards(body, name, provenance, relativeVaultPath(opts.config.obsidianVault, roadmapPath(project.obsidianPath)));
       if (parsed.length === 0) {
         projects.push({ project: name, outcome: "unparsed" });
         continue;
@@ -591,8 +636,13 @@ export async function writeBoard(opts: {
     : boardPath(opts.vaultPath);
   const path = opts.canvas ? canvasPath(base_path) : base_path;
   const model = opts.scope ? scopeModel(opts.model, opts.scope.project) : opts.model;
-  const { markdown, rendered, summarized } = renderBoard(model, opts.scope?.project);
-  const output = opts.canvas ? renderCanvas(model, opts.scope?.project) : markdown;
+  const md = renderBoard(model, opts.scope?.project);
+  const output = opts.canvas ? renderCanvas(model, opts.scope?.project) : md.markdown;
+  // A canvas is an infinite surface, so it draws every card and the column cap
+  // never applies. Reporting the markdown counts for a canvas write would
+  // describe a file that was not written.
+  const rendered = opts.canvas ? model.cards.length : md.rendered;
+  const summarized = opts.canvas ? 0 : md.summarized;
   const base = { path, rendered, summarized, declined: opts.model.declined };
   const file = Bun.file(path);
   const existing = (await file.exists()) ? await file.text() : null;
@@ -775,18 +825,29 @@ export function renderCanvas(model: BoardModel, scope?: string): string {
       height: groupH,
     });
     cards.forEach((card, j) => {
-      const who = scope ? "" : `\n\n— ${card.project}`;
-      const mark = card.provenance === "inferred" ? "\n\n_inferred_" : "";
-      nodes.push({
+      const box = {
         id: canvasId(card.id),
-        type: "text",
-        text: `${card.title}${who}${mark}`,
         x,
         y: j * (CANVAS_CARD_H + CANVAS_CARD_GAP),
         width: CANVAS_COL_W,
         height: CANVAS_CARD_H,
         color: CANVAS_COLOR[col],
-      });
+      };
+      if (card.source) {
+        // A file node opens the section on click and — unlike a text node —
+        // counts for backlinks and is reachable from search. That is what turns
+        // a card from a label into the ticket itself.
+        nodes.push({
+          ...box,
+          type: "file",
+          file: card.source.path,
+          subpath: `#${card.source.anchor}`,
+        });
+        return;
+      }
+      const who = scope ? "" : `\n\n— ${card.project}`;
+      const mark = card.provenance === "inferred" ? "\n\n_inferred_" : "";
+      nodes.push({ ...box, type: "text", text: `${card.title}${who}${mark}` });
     });
   });
 

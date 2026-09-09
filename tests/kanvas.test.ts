@@ -1146,3 +1146,75 @@ describe("canvas renderer", () => {
     await cleanup();
   });
 });
+
+describe("enriched cards", () => {
+  const ENRICHED = mirror({
+    needsReview: false,
+    source: "repo:ROADMAP.md",
+    body: `## Active milestones this week
+
+### T2 — Segundo hechizo
+
+**Por qué:** hace que el combate se sienta distinto.
+
+### T3 — Sonido
+
+**Por qué:** lo más barato con más efecto.
+
+## Near backlog
+
+- [ ] Una fila sin sección propia
+`,
+  });
+
+  test("a section under a column is a card that knows where its own section lives", async () => {
+    const { config, cleanup } = await setup([{ name: "alpha", roadmap: ENRICHED }]);
+    const r = await collectProjectCards({ config });
+    const now = r.cards.filter((c) => c.column === "now");
+    expect(now.map((c) => c.title)).toEqual(["T2 — Segundo hechizo", "T3 — Sonido"]);
+    expect(now[0]?.source?.anchor).toBe("T2 — Segundo hechizo");
+    expect(now[0]?.source?.path).toBe("Projects/alpha/_roadmap.md");
+    await cleanup();
+  });
+
+  test("a plain checkbox line is still a card, just without a section to open", async () => {
+    const { config, cleanup } = await setup([{ name: "alpha", roadmap: ENRICHED }]);
+    const r = await collectProjectCards({ config });
+    const next = r.cards.find((c) => c.column === "next")!;
+    expect(next.title).toBe("Una fila sin sección propia");
+    expect(next.source).toBeUndefined();
+    await cleanup();
+  });
+
+  test("the canvas opens a card with a section and only describes one without", async () => {
+    const { config, cleanup } = await setup([{ name: "alpha", roadmap: ENRICHED }]);
+    const model = await buildBoardModel({ config, today: "2026-09-09" });
+    const doc = JSON.parse(renderCanvas(model, "alpha")) as {
+      nodes: Array<{ type: string; file?: string; subpath?: string }>;
+    };
+    const files = doc.nodes.filter((n) => n.type === "file");
+    const texts = doc.nodes.filter((n) => n.type === "text");
+    expect(files).toHaveLength(2);
+    expect(texts).toHaveLength(1);
+    // A subpath must be a real heading in the file it points at, and start with '#'.
+    const roadmap = await Bun.file(join(config.obsidianVault, files[0]!.file!)).text();
+    expect(files[0]!.subpath!.startsWith("#")).toBe(true);
+    expect(roadmap).toContain(`### ${files[0]!.subpath!.slice(1)}`);
+    await cleanup();
+  });
+
+  test("a canvas write reports every card, since the column cap does not apply", async () => {
+    const { config, cleanup } = await setup([{ name: "alpha", roadmap: ENRICHED }]);
+    const model = await buildBoardModel({ config, today: "2026-09-09" });
+    const alpha = config.projects[0]!;
+    const r = await writeBoard({
+      model,
+      vaultPath: config.obsidianVault,
+      scope: { project: "alpha", obsidianPath: alpha.obsidianPath },
+      canvas: true,
+    });
+    expect(r.rendered).toBe(model.cards.length);
+    expect(r.summarized).toBe(0);
+    await cleanup();
+  });
+});

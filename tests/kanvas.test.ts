@@ -814,3 +814,62 @@ describe("findings from review", () => {
     await cleanup();
   });
 });
+
+describe("column cap fairness", () => {
+  test("an over-cap column takes from every project, not the first ones in order", () => {
+    // Observed live: a newly registered project's cards were invisible because
+    // eight older projects filled the column first. Position in a config file
+    // must not decide who is visible on a board that claims to show everything.
+    const model = emptyModel();
+    for (const project of ["alpha", "beta", "gamma"]) {
+      for (let i = 0; i < 10; i++) {
+        model.cards.push({
+          id: `${project}/c${i}`,
+          project,
+          title: `${project} card ${i}`,
+          column: "now",
+          provenance: "reconciled",
+        });
+      }
+    }
+    const r = renderBoard(model);
+    expect(r.rendered).toBe(12);
+    expect(r.summarized).toBe(18);
+    for (const project of ["alpha", "beta", "gamma"]) {
+      expect(r.markdown).toContain(`${project} card 0`);
+    }
+  });
+
+  test("a column under the cap is untouched and keeps its order", () => {
+    const model = emptyModel();
+    for (const project of ["alpha", "beta"]) {
+      model.cards.push({
+        id: `${project}/only`,
+        project,
+        title: `${project} only`,
+        column: "now",
+        provenance: "reconciled",
+      });
+    }
+    const r = renderBoard(model);
+    expect(r.rendered).toBe(2);
+    expect(r.summarized).toBe(0);
+    expect(r.markdown.indexOf("alpha only")).toBeLessThan(r.markdown.indexOf("beta only"));
+  });
+
+  test("the fair slice is stable across renders", () => {
+    const model = emptyModel();
+    for (const project of ["alpha", "beta", "gamma", "delta"]) {
+      for (let i = 0; i < 5; i++) {
+        model.cards.push({
+          id: `${project}/c${i}`,
+          project,
+          title: `${project} ${i}`,
+          column: "now",
+          provenance: "reconciled",
+        });
+      }
+    }
+    expect(renderBoard(model).markdown).toBe(renderBoard(model).markdown);
+  });
+});

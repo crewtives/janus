@@ -306,6 +306,40 @@ function escapeCell(text: string): string {
 }
 
 /**
+ * Take `cap` cards, one project at a time in rotation, instead of the first
+ * `cap` in iteration order.
+ *
+ * A straight `slice` truncates by config order, so the projects listed last
+ * lose every card the moment a column is over the cap — observed live: a
+ * newly registered project's cards were invisible on a board that had room,
+ * because eight older projects filled the column first. A board whose whole
+ * claim is "everything at once" cannot let position in a config file decide
+ * who is visible. Relative order inside each project is preserved, so the
+ * render stays deterministic.
+ */
+function fairSlice(cards: BoardCard[], cap: number): BoardCard[] {
+  if (cards.length <= cap) return cards;
+  const queues = new Map<string, BoardCard[]>();
+  for (const c of cards) {
+    const q = queues.get(c.project);
+    if (q) q.push(c);
+    else queues.set(c.project, [c]);
+  }
+  const out: BoardCard[] = [];
+  while (out.length < cap) {
+    let took = false;
+    for (const q of queues.values()) {
+      if (q.length === 0) continue;
+      out.push(q.shift()!);
+      took = true;
+      if (out.length === cap) break;
+    }
+    if (!took) break;
+  }
+  return out;
+}
+
+/**
  * Pure function of the model — no clock, no filesystem. That is what makes the
  * byte-stability contract testable without touching a vault.
  */
@@ -320,7 +354,7 @@ export function renderBoard(model: BoardModel): RenderResult {
   let summarized = 0;
   for (const col of COLUMNS) {
     const all = byColumn.get(col)!;
-    shown.set(col, all.slice(0, COLUMN_CAP));
+    shown.set(col, fairSlice(all, COLUMN_CAP));
     const extra = Math.max(0, all.length - COLUMN_CAP);
     overflow.set(col, extra);
     rendered += Math.min(all.length, COLUMN_CAP);

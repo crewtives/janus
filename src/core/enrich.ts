@@ -263,6 +263,11 @@ async function enrichIndex(project: ProjectConfig, vaultRelPath: string, pulses:
     if (String(existingFm.managed_by_janus ?? "") === "false") return false;
   }
 
+  // The `[[Kanvas]]` link in the Links section below lands here, not only in the
+  // scaffolds, because of a real asymmetry: the hub, MOC and dashboard generators
+  // are all create-or-skip, so their links only ever reach a NEW vault. This writer
+  // regenerates `_index.md` on every run, so it is the only path by which an
+  // existing vault discovers the board.
   const content = `---
 type: project-index
 project: ${project.name}
@@ -328,7 +333,7 @@ LIMIT 14
 - Hub: [[${project.name}]]
 - [[_roadmap|Roadmap]] · [[STRATEGY|Strategy]]
 - MOCs: [[Projects MOC]] · [[Decisions MOC]] · [[Risks MOC]] · [[Weekly MOC]]
-- Dashboards: [[Janus Pulse|Global view]] · [[Open Risks]] · [[Drift]] · [[Inferring]]
+- Dashboards: [[Janus Pulse|Global view]] · [[Open Risks]] · [[Drift]] · [[Inferring]] · [[Kanvas]]
 `;
 
   await writeFile(target, content);
